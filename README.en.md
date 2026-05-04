@@ -305,6 +305,15 @@ Use these prefixes in chat mode or `omd run` to force a specific mode:
 > # ✗ Wrong: double quotes let the shell expand $ralph to empty string
 > omd run "$ralph fix the bug"
 > ```
+>
+> **Quote characters**: Task descriptions must use ASCII straight quotes `" "`, not Chinese curly quotes `" "` or `" "`. The shell will not recognize curly quotes as string delimiters.
+> ```bash
+> # ✓ Correct: ASCII straight quotes
+> omd run '$ralph "implement user login"'
+>
+> # ✗ Wrong: Chinese curly quotes, shell can't parse them
+> omd run '$ralph "implement user login"'
+> ```
 
 ## Commands
 

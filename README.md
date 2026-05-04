@@ -310,6 +310,15 @@ omd run "回复：OMD-OK"
 > # ✗ 错误：双引号会被 shell 展开 $ralph → 空值
 > omd run "$ralph 修复 Bug"
 > ```
+>
+> **注意引号字符**：任务描述必须使用 ASCII 直引号 `" "`，不能使用中文花引号 `" "` 或 `" "`。Shell 不会识别花引号为字符串边界。
+> ```bash
+> # ✓ 正确：ASCII 直引号
+> omd run '$ralph "实现用户登录功能"'
+>
+> # ✗ 错误：中文花引号，shell 无法识别
+> omd run '$ralph "实现用户登录功能"'
+> ```
 
 ## 命令
 
