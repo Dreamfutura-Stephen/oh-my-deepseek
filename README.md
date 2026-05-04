@@ -2,7 +2,7 @@
 
 > [English](README.en.md) | **中文**
 
-**DeepSeek 多智能体编排层。** 零依赖框架，将 DeepSeek API 转化为多智能体编码系统——自主执行、并行团队模式、交互式聊天和 MCP 集成。
+**DeepSeek 多智能体编排层。** 零依赖框架，将 DeepSeek API 转化为多智能体编码系统——自主执行、并行团队模式、交互式聊天和 MCP 集成。最佳实践方案是搭配 claudecode+deepseekV4试用
 <img width="1913" height="822" alt="image" src="https://github.com/user-attachments/assets/b96bf41c-fa95-43b3-8c9d-857ba2664ab7" />
 
 ## 快速开始
