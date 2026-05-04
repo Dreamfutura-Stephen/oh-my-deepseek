@@ -2,6 +2,11 @@
 
 > [English](README.md) | **中文**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="banner.svg">
+  <img alt="oh-my-deepseek whale banner" src="banner.svg" width="512" height="240">
+</picture>
+
 **DeepSeek 多智能体编排层。** 零依赖框架，将 DeepSeek API 转化为多智能体编码系统——自主执行、并行团队模式、交互式聊天和 MCP 集成。
 
 ## 快速开始
