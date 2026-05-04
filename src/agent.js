@@ -40,14 +40,15 @@ const agentTool = {
   description:
     'Spawn a sub-agent to handle a focused sub-task. The sub-agent runs to completion ' +
     'and returns its result. Use this for: delegating research, parallel sub-tasks, ' +
-    'or offloading well-scoped work. Available agent types: architect, executor, debugger, reviewer, explore.',
+    'or offloading well-scoped work. Available agent types: planner, architect, executor, ' +
+    'debugger, tracer, reviewer, security_reviewer, verifier, test_engineer, explore.',
   parameters: {
     type: 'object',
     properties: {
       agent_type: {
         type: 'string',
-        description: 'Type of agent to spawn: architect, executor, debugger, reviewer, or explore.',
-        enum: ['architect', 'executor', 'debugger', 'reviewer', 'explore'],
+        description: 'Type of agent to spawn: planner, architect, executor, debugger, tracer, reviewer, security_reviewer, verifier, test_engineer, or explore.',
+        enum: ['planner', 'architect', 'executor', 'debugger', 'tracer', 'reviewer', 'security_reviewer', 'verifier', 'test_engineer', 'explore'],
       },
       task: {
         type: 'string',

@@ -89,7 +89,6 @@ input → intent classifier → planner / architect / executor / debugger / trac
 | **test_engineer** | deepseek-chat | Test engineer — unit tests, integration tests, coverage analysis |
 | **explore** | deepseek-chat | Codebase explorer — search, read, understand code |
 
-
 ### Project Structure
 
 ```
@@ -110,7 +109,7 @@ oh-my-deepseek/
 │   ├── agent.js         # Agent system + execution loop + sub-agent spawning
 │   ├── client.js        # DeepSeek API client (native fetch, no deps)
 │   ├── config.js        # Config: env >> project >> user >> defaults
-│   ├── mailbox.js       # Inter-agent messaging (Houmao)
+│   ├── mailbox.js       # Inter-agent messaging
 │   ├── mcp.js           # MCP server (JSON-RPC over stdio)
 │   ├── orchestrator.js  # Autopilot / team / chat orchestration
 │   ├── state.js         # Session persistence, ADR, memory
