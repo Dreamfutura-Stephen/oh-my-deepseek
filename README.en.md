@@ -4,6 +4,9 @@
 
 **Multi-agent orchestration layer for DeepSeek.** A zero-dependency framework that turns DeepSeek's API into a multi-agent coding system — autonomous execution, parallel team mode, interactive chat, and MCP integration.
 
+<img width="1024" height="1536" alt="image" src="https://github.com/user-attachments/assets/dae2f32f-6e11-40a5-96b1-39b9eb7991a2" />
+
+
 ## Quick Start
 
 ```bash
