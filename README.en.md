@@ -2,11 +2,6 @@
 
 > **English** | [中文](README.md)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="banner.svg">
-  <img alt="oh-my-deepseek whale banner" src="banner.svg" width="512" height="240">
-</picture>
-
 **Multi-agent orchestration layer for DeepSeek.** A zero-dependency framework that turns DeepSeek's API into a multi-agent coding system — autonomous execution, parallel team mode, interactive chat, and MCP integration.
 
 ## Quick Start
