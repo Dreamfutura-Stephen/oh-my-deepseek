@@ -7,8 +7,8 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 
 const DEFAULTS = {
-  model: 'deepseek-chat',
-  reasonerModel: 'deepseek-reasoner',
+  model: 'deepseek-v4-flash',
+  reasonerModel: 'deepseek-v4-pro',
   maxTokens: 8192,
   temperature: 0.7,
   baseUrl: 'https://api.deepseek.com',

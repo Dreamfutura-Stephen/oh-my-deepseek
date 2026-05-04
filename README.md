@@ -24,28 +24,306 @@ omd run "将用户认证模块重构为 JWT"
 omd chat
 ```
 
+## 新手入门
+
+如果你是第一次使用 OMD，按以下步骤从零开始：
+
+### 1. 安装
+
+```bash
+npm install -g oh-my-deepseek
+```
+
+效果：
+
+```
+added 1 package in 2s
+```
+
+确认版本：
+
+```bash
+omd --version
+```
+
+效果：
+
+```
+omd v1.x.x
+```
+
+### 2. 设置 API 密钥
+
+```bash
+export OMD_API_KEY=sk-your-key-here
+```
+
+> 建议写入 `~/.bashrc` 或 `~/.zshrc` 以避免每次重复输入。
+
+### 3. 初始化项目结构
+
+```bash
+omd setup
+```
+
+效果（含鲸鱼横幅，此处省略）:
+
+```
+✓ Created .omd/ directory structure
+✓ API key found (sk-abcd1234...)
+✓ Config saved to .omd/config.json
+
+Setup complete. Run 'omd chat' to start interactive mode.
+Or 'omd run "your task"' for one-shot autonomous execution.
+```
+
+这会在当前目录创建 `.omd/` 文件夹（含 `sessions/`、`memory/`、`logs/` 子目录）和默认配置文件。所有会话记录和决策日志都会保存在这里。
+
+### 4. 环境检查
+
+```bash
+omd doctor
+```
+
+效果：
+
+```
+  ✓ Node.js v22.x.x
+  ✓ API key — sk-abcd1234...
+  ✓ .omd/ directory
+  ✓ Config loaded — model: deepseek-v4-flash
+  ✓ DeepSeek API — connected
+```
+
+全部 ✓ 通过即可开始使用。如有 ✗ 项，按提示修复。
+
+### 5. 快速烟雾测试
+
+跑一个最简单的任务确认一切正常：
+
+```bash
+omd run "回复：OMD-OK"
+```
+
+效果：
+
+```
+▶ Mode: autopilot
+⚡ stage — explore — Exploring codebase...
+⚡ stage — plan — Designing solution...
+⚡ stage — execute — Implementing...
+✓ executor done (5 steps, 3 tool calls)
+⚡ stage — review — Adversarial review...
+✓ reviewer done (3 steps, 0 tool calls)
+✓ All changes approved.
+✓ Done.
+```
+
+看到 `▶ Mode: autopilot`、各阶段执行日志、最终 `✓ Done`，说明系统运转正常。
+
+### 6. 模式详解与选择
+
+根据任务类型选择合适的执行模式。每种模式有独立的流水线和终端输出特征。
+
+---
+
+#### 自动驾驶模式（Autopilot）— `omd run "任务"`
+
+**适用场景**：写新功能、添加模块、自动化重构等常规编码任务。
+
+**使用模型**：
+| 阶段 | 模型 | 说明 |
+|------|------|------|
+| 探索 explore | deepseek-v4-flash | 快速搜索代码库，寻找相关文件 |
+| 规划 plan | deepseek-v4-pro | 强推理能力，设计架构和方案 |
+| 执行 execute | deepseek-v4-flash | 快速编写和修改代码 |
+| 审查 review | deepseek-v4-flash | 经济高效的代码审查 |
+
+**执行流水线**：
+```
+探索 → [门控] → 规划 → [门控] → 执行 → [门控] → 审查 → [门控] → 修复循环（最多 3 次）
+```
+
+**终端效果**：
+
+```
+▶ Mode: autopilot                    ← 模式标识
+⚡ stage — explore                    ← 探索代码库
+⚡ stage — plan                       ← 架构设计
+⚡ stage — execute — Implementing...  ← 编写代码
+⚡ stage — review — Adversarial...    ← 对抗式审查
+⚡ stage — fix — Applying fixes...    ← 按审查意见修复（最多 3 轮）
+✓ All changes approved.              ← 审查通过
+✓ Done.
+```
+
+**关键行为**：
+- 每个阶段之间有**门控检查**：探索太短？规划没有步骤？执行没改代码？门控会发出警告
+- 审查若返回 `NEEDS_CHANGES`，自动进入修复循环，最多重试 3 次
+- 审查若返回 `REJECTED`，立即停止，需人工介入
+- `▶ Mode: autopilot` 表示标准自动驾驶（3 次修复上限）
+
+---
+
+#### Ralph 模式 — `omd run '$ralph "任务"'`
+
+**适用场景**：修复 Bug、排查疑难问题、需要反复验证才能通过的复杂任务。
+
+**使用模型**：
+| 智能体 | 模型 | 说明 |
+|--------|------|------|
+| 探索/追踪 explore/tracer | deepseek-v4-pro | 深度推理，定位根因 |
+| 规划/架构 plan/architect | deepseek-v4-pro | 每次循环可能完全重新设计方案 |
+| 执行 executor | deepseek-v4-flash | 快速迭代修复 |
+| 审查 reviewer | deepseek-v4-flash | 多次审查直到通过 |
+
+**执行流水线**：
+```
+探索 → 规划 → 执行 → 审查 → 修复（最多 20 次迭代）
+↓ 如果审查结果 REJECTED ↓
+重新探索 → 重新规划 → 执行 → 审查 → 修复（最多 5 个全新周期）
+```
+
+**终端效果**：
+
+```
+▶ Mode: ralph                         ← 模式标识（ralph，不是 autopilot）
+⚡ stage — explore
+⚡ stage — plan
+⚡ stage — execute — Implementing...
+⚡ stage — review — Adversarial...
+⚡ stage — fix — attempt 2/20         ← 修复次数显示
+⚡ stage — fix — attempt 3/20
+...
+⟳ ralph_rethink — Rejected...        ← REJECTED 后自动重新探索
+⚡ stage — explore — cycle 2          ← 进入第 2 个全新周期
+...
+✓ All changes approved.
+```
+
+**关键行为**：
+- 修复循环最多 **20 次**（普通 autopilot 只有 3 次）
+- 若审查 `REJECTED`，不停止而是触发**重新探索 + 重新规划**，最多 5 个全新周期
+- 每次完全重新设计，而不是在错误方案上修修补补
+- 适合测试环境不稳定、边界条件多、需要反复试错的场景
+
+---
+
+#### 团队模式（Team）— `omd team <N> "任务"`
+
+**适用场景**：大规模重构、模块拆分、需要并行处理多个独立子任务。
+
+**使用模型**：
+| 智能体 | 模型 | 说明 |
+|--------|------|------|
+| 架构师 architect | deepseek-v4-pro | 强推理拆分任务，确保子任务边界清晰 |
+| 执行者 executor × N | deepseek-v4-flash | N 个并行，经济高效 |
+| 审查者 reviewer | deepseek-v4-flash | 检查跨 worker 一致性和集成问题 |
+
+**执行流水线**：
+```
+架构师拆分任务 → [门控] → N 个执行者并行 → [门控] → 审查者合并
+```
+
+**终端效果**：
+
+```
+▶ Mode: team                          ← 模式标识
+⚡ stage — plan — Team leader...      ← 架构师规划子任务
+⚡ stage — execute — 4 workers...     ← N 个 Worker 并行执行
+⚡ stage — workers_done               ← 全部 Worker 完成
+⚡ stage — review — Reviewing...      ← 审查合并结果
+✓ reviewer done
+```
+
+**关键行为**：
+- 架构师（deepseek-v4-pro）先将任务拆分为 N 个独立子任务
+- N 个执行者**并行执行**，互不依赖
+- 审查者检查**跨 Worker 的一致性**和集成问题
+- 适合：重构数据库层、拆分 monolith、并行实现多个 API
+
+---
+
+#### 聊天模式（Chat）— `omd chat`
+
+**适用场景**：探索代码库、提问、需求不明确时先讨论。
+
+**使用模型**：根据意图自动路由
+
+| 意图 | 路由智能体 | 模型 |
+|------|-----------|------|
+| 调试 debug / 追踪 trace | debugger / tracer | deepseek-v4-pro |
+| 规划 plan / 设计 design | planner / architect | deepseek-v4-pro |
+| 审查 review / 安全 security | reviewer / security_reviewer | deepseek-v4-flash |
+| 验证 verify / 测试 test | verifier / test_engineer | deepseek-v4-flash |
+| 探索 explore / 实施 implement | explore / executor | deepseek-v4-flash |
+
+**执行流程**：
+```
+输入文本 → 意图分类器 → 路由到对应智能体
+```
+
+**终端效果**：
+
+```
+▸ 这段代码的逻辑是什么              ← 用户输入
+▶ Mode: chat                        ← 聊天模式
+...智能体回答...
+
+▸ 修复这个函数的内存泄漏问题         ← 新的输入
+▶ Mode: autopilot                   ← 自动切换模式
+⚡ stage — explore
+...
+```
+
+**关键行为**：
+- 输入文本自动通过 `classifyIntent` 识别意图
+- 不匹配关键词时走聊天模式，单轮问答
+- 匹配 implement/debug 等关键词时**自动切换到 autopilot 模式**
+- 支持魔法关键词强制指定模式：`$ralph 修复 Bug` → Ralph 模式
+- 上下文保持最近 12 条消息
+
+### 模式速查表
+
+| 模式 | 命令 | 迭代上限 | 支持重新探索 | 并行 | 适用场景 |
+|------|------|---------|------------|------|---------|
+| **Autopilot** | `omd run "..."` | 3 次修复 | ❌ | ❌ | 常规编码、新功能 |
+| **Ralph** | `omd run '\$ralph "..."'` | 20 次修复 + 5 周期 | ✅ | ❌ | Bug 修复、疑难排查 |
+| **Team** | `omd team <N> "..."` | 1 轮 | ❌ | ✅ N 个 Worker | 大规模重构、模块拆分 |
+| **Chat** | `omd chat` | 单轮问答 | — | — | 探索、提问、需求讨论 |
+
+### 7. 魔法关键词速查
+
+在聊天模式或 `omd run` 中可以使用以下前缀强制指定模式：
+
+| 关键词 | 用途 | 终端显示效果 |
+|--------|------|------------|
+| `$autopilot "..."` | 强制自动驾驶模式 | `▶ Mode: autopilot` → 探索→规划→执行→审查→修复（最多 3 次） |
+| `$ralph "..."` | 持续验证-修复循环 | `▶ Mode: ralph` → 20 次迭代 + 5 次重新探索周期 |
+| `$team <N> "..."` | 团队并行执行 | `▶ Mode: team` → N 个 Worker 并行 + 审查合并 |
+
+> **注意**：在终端中使用 `$ralph` 等关键词时，务必用单引号包裹整个命令，防止 shell 变量展开：
+> ```bash
+> # ✓ 正确：单引号防止变量展开
+> omd run '$ralph "修复 Bug"'
+>
+> # ✗ 错误：双引号会被 shell 展开 $ralph → 空值
+> omd run "$ralph 修复 Bug"
+> ```
+
 ## 命令
 
 | 命令 | 说明 |
 |------|------|
-| `omd run "任务"` | 自动驾驶执行（探索 → 规划 → 执行 → 审查 → 修复） |
-| `omd team <N> "任务"` | N 个工作者的并行团队模式 |
+| `omd run "任务描述"` | 自动驾驶执行（探索 → 规划 → 执行 → 审查 → 修复） |
+| `omd ralph "任务描述"` | 持续验证-修复循环（Ralph 模式，最多 20 次迭代） |
+| `omd team <N> "任务描述"` | N 个工作者的并行团队模式 |
 | `omd chat` | 带意图路由的交互式聊天 |
 | `omd mcp` | 启动 MCP 服务器（用于 Claude Code、Codex CLI、Cursor） |
 | `omd setup` | 初始化 `.omd/` 项目结构 |
 | `omd doctor` | 环境和 API 连接检查 |
 | `omd sessions` | 列出最近的会话 |
 | `omd agents` | 列出可用的智能体类型 |
-
-### 魔法关键词
-
-在聊天或 `run` 中使用：
-
-```
-$autopilot "implement REST API"   # 强制自动驾驶模式
-$team 4 "refactor database"       # 4 个工作者的团队模式
-$ralph "fix performance bug"      # 持续验证-修复循环（Ralph 模式）
-```
 
 ## 架构
 
@@ -78,16 +356,16 @@ $ralph "fix performance bug"      # 持续验证-修复循环（Ralph 模式）
 
 | 智能体 | 模型 | 职责 |
 |--------|------|------|
-| **planner** | deepseek-reasoner | 战略规划 — 任务分解、验收标准、风险评估 |
-| **architect** | deepseek-reasoner | 系统设计 — 架构、组件划分、接口契约 |
-| **executor** | deepseek-chat | 实施工程师 — 代码、文件、命令 |
-| **debugger** | deepseek-reasoner | 错误诊断、根因分析、修复方案 |
-| **tracer** | deepseek-reasoner | 因果追踪 — 多假设竞争、证据收集 |
-| **reviewer** | deepseek-chat | 对抗式代码审查（受 Claude Nexus 启发） |
-| **security_reviewer** | deepseek-chat | 安全审查 — OWASP Top 10、凭据泄露、注入攻击 |
-| **verifier** | deepseek-chat | 完成验证 — 验收标准、边界条件验证 |
-| **test_engineer** | deepseek-chat | 测试工程师 — 单元测试、集成测试、覆盖率分析 |
-| **explore** | deepseek-chat | 代码库探索者 — 搜索、阅读、理解代码 |
+| **planner** | deepseek-v4-pro | 战略规划 — 任务分解、验收标准、风险评估 |
+| **architect** | deepseek-v4-pro | 系统设计 — 架构、组件划分、接口契约 |
+| **executor** | deepseek-v4-flash | 实施工程师 — 代码、文件、命令 |
+| **debugger** | deepseek-v4-pro | 错误诊断、根因分析、修复方案 |
+| **tracer** | deepseek-v4-pro | 因果追踪 — 多假设竞争、证据收集 |
+| **reviewer** | deepseek-v4-flash | 对抗式代码审查（受 Claude Nexus 启发） |
+| **security_reviewer** | deepseek-v4-flash | 安全审查 — OWASP Top 10、凭据泄露、注入攻击 |
+| **verifier** | deepseek-v4-flash | 完成验证 — 验收标准、边界条件验证 |
+| **test_engineer** | deepseek-v4-flash | 测试工程师 — 单元测试、集成测试、覆盖率分析 |
+| **explore** | deepseek-v4-flash | 代码库探索者 — 搜索、阅读、理解代码 |
 
 ### 项目结构
 
@@ -129,13 +407,15 @@ oh-my-deepseek/
 
 ```bash
 export OMD_API_KEY=sk-...          # API 密钥（回退到 DEEPSEEK_API_KEY）
-export OMD_MODEL=deepseek-chat     # 默认模型
-export OMD_REASONER_MODEL=deepseek-reasoner
+export OMD_MODEL=deepseek-v4-flash # 默认模型（V4 Flash，经济快速）
+export OMD_REASONER_MODEL=deepseek-v4-pro  # 推理模型（V4 Pro，更强推理能力）
 export OMD_BASE_URL=https://api.deepseek.com
 export OMD_MAX_TOKENS=8192
 export OMD_TEMPERATURE=0.7
 export OMD_DEFAULT_MODE=autopilot   # autopilot, team, chat
 ```
+
+> 注意：`deepseek-chat` 和 `deepseek-reasoner` 旧模型名将于 **2026 年 7 月 24 日** 下线。请尽早迁移到 `deepseek-v4-flash` 和 `deepseek-v4-pro`。
 
 ## MCP 集成
 

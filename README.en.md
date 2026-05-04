@@ -22,15 +22,296 @@ export OMD_API_KEY=sk-your-key-here
 # Run in autopilot mode
 omd run "refactor the auth module to use JWT"
 
+# Or run with persistent verify-fix loop
+omd ralph "fix performance bug"
+
 # Or start interactive chat
 omd chat
 ```
+
+## Getting Started Guide
+
+New to OMD? Follow these steps to go from zero to running your first task.
+
+### 1. Install
+
+```bash
+npm install -g oh-my-deepseek
+```
+
+Output:
+
+```
+added 1 package in 2s
+```
+
+Verify the version:
+
+```bash
+omd --version
+```
+
+Output:
+
+```
+omd v1.x.x
+```
+
+### 2. Set your API key
+
+```bash
+export OMD_API_KEY=sk-your-key-here
+```
+
+> Add this to your `~/.bashrc` or `~/.zshrc` to avoid re-entering it every time.
+
+### 3. Initialize project structure
+
+```bash
+omd setup
+```
+
+Output (banner trimmed):
+
+```
+✓ Created .omd/ directory structure
+✓ API key found (sk-abcd1234...)
+✓ Config saved to .omd/config.json
+
+Setup complete. Run 'omd chat' to start interactive mode.
+Or 'omd run "your task"' for one-shot autonomous execution.
+```
+
+This creates the `.omd/` folder with `sessions/`, `memory/`, and `logs/` directories. All session records and decision logs are stored here.
+
+### 4. Environment check
+
+```bash
+omd doctor
+```
+
+Output:
+
+```
+  ✓ Node.js v22.x.x
+  ✓ API key — sk-abcd1234...
+  ✓ .omd/ directory
+  ✓ Config loaded — model: deepseek-v4-flash
+  ✓ DeepSeek API — connected
+```
+
+All checks must pass with ✓. Fix any ✗ items before proceeding.
+
+### 5. Quick smoke test
+
+Run a minimal task to verify everything works:
+
+```bash
+omd run "Reply with: OMD-OK"
+```
+
+Output:
+
+```
+▶ Mode: autopilot
+⚡ stage — explore — Exploring codebase...
+⚡ stage — plan — Designing solution...
+⚡ stage — execute — Implementing...
+✓ executor done (5 steps, 3 tool calls)
+⚡ stage — review — Adversarial review...
+✓ reviewer done (3 steps, 0 tool calls)
+✓ All changes approved.
+✓ Done.
+```
+
+If you see `▶ Mode: autopilot`, stage logs, and `✓ Done`, the system is working.
+
+### 6. Mode reference
+
+Each execution mode uses a specific combination of models for its pipeline stages.
+
+---
+
+#### Autopilot — `omd run "task"`
+
+**Use when**: Building features, adding modules, routine coding.
+
+**Model assignment**:
+| Stage | Model | Role |
+|-------|-------|------|
+| explore | deepseek-v4-flash | Quickly search the codebase for relevant files |
+| plan | deepseek-v4-pro | Strong reasoning for architecture and solution design |
+| execute | deepseek-v4-flash | Fast code writing and file editing |
+| review | deepseek-v4-flash | Cost-effective adversarial code review |
+
+**Pipeline**:
+```
+explore → [gate] → plan → [gate] → execute → [gate] → review → [gate] → fix loop (max 3)
+```
+
+**Terminal output**:
+```
+▶ Mode: autopilot
+⚡ stage — explore
+⚡ stage — plan
+⚡ stage — execute — Implementing...
+⚡ stage — review — Adversarial...
+⚡ stage — fix — Applying fixes...
+✓ All changes approved.
+✓ Done.
+```
+
+**Behavior**:
+- Phase gates validate each stage before proceeding
+- `NEEDS_CHANGES` review → auto-fix loop, up to 3 retries
+- `REJECTED` review → immediate stop, manual intervention needed
+
+---
+
+#### Ralph mode — `omd run '$ralph "task"'`
+
+**Use when**: Bug fixing, troubleshooting, complex tasks that need repeated validation.
+
+**Model assignment**:
+| Agent | Model | Role |
+|-------|-------|------|
+| explore / tracer | deepseek-v4-pro | Deep reasoning to locate root cause |
+| plan / architect | deepseek-v4-pro | May redesign from scratch each cycle |
+| executor | deepseek-v4-flash | Fast iteration on fixes |
+| reviewer | deepseek-v4-flash | Repeated reviews until approval |
+
+**Pipeline**:
+```
+explore → plan → execute → review → fix (up to 20 iterations)
+↓ on REJECTED ↓
+re-explore → re-plan → execute → review → fix (up to 5 fresh cycles)
+```
+
+**Terminal output**:
+```
+▶ Mode: ralph
+⚡ stage — explore
+⚡ stage — plan
+⚡ stage — execute — Implementing...
+⚡ stage — review — Adversarial...
+⚡ stage — fix — attempt 2/20
+...
+⟳ ralph_rethink — Rejected...
+⚡ stage — explore — cycle 2
+...
+✓ All changes approved.
+```
+
+**Behavior**:
+- Up to **20** fix iterations (vs 3 in autopilot)
+- `REJECTED` triggers **re-explore + re-plan** (up to 5 complete fresh cycles)
+- Each cycle starts from scratch — never patches a fundamentally wrong approach
+
+---
+
+#### Team mode — `omd team <N> "task"`
+
+**Use when**: Large refactoring, module decomposition, parallel sub-tasks.
+
+**Model assignment**:
+| Agent | Model | Role |
+|-------|-------|------|
+| architect | deepseek-v4-pro | Split task into N independent sub-tasks |
+| executor × N | deepseek-v4-flash | N parallel workers, fast execution |
+| reviewer | deepseek-v4-flash | Check cross-worker consistency and integration |
+
+**Pipeline**:
+```
+architect splits task → [gate] → N parallel executors → [gate] → reviewer merges
+```
+
+**Terminal output**:
+```
+▶ Mode: team
+⚡ stage — plan — Team leader...
+⚡ stage — execute — 4 workers...
+⚡ stage — workers_done
+⚡ stage — review — Reviewing...
+✓ reviewer done
+```
+
+**Behavior**:
+- Architect (deepseek-v4-pro) decomposes into N independent sub-tasks
+- N executors run **in parallel** with no dependencies between them
+- Reviewer checks **cross-worker consistency** and integration issues
+
+---
+
+#### Chat mode — `omd chat`
+
+**Use when**: Exploring code, asking questions, discussing unclear requirements.
+
+**Intent routing**:
+
+| Intent | Routed to | Model |
+|--------|-----------|-------|
+| debug / trace | debugger / tracer | deepseek-v4-pro |
+| plan / design | planner / architect | deepseek-v4-pro |
+| review / security | reviewer / security_reviewer | deepseek-v4-flash |
+| verify / test | verifier / test_engineer | deepseek-v4-flash |
+| explore / implement | explore / executor | deepseek-v4-flash |
+
+**Flow**:
+```
+input → intent classifier → route to matching agent
+```
+
+**Terminal output**:
+```
+▸ what does this module do           ← user input
+▶ Mode: chat
+...agent response...
+
+▸ fix this memory leak               ← new input
+▶ Mode: autopilot                    ← auto-switched
+⚡ stage — explore
+...
+```
+
+**Behavior**:
+- Input classified via `classifyIntent` keyword matching
+- Non-matching input → single-turn chat
+- Matching implement/debug keywords → **auto-switches to autopilot mode**
+- Supports magic keywords to force specific modes
+- Context retains last 12 messages
+
+### Mode comparison
+
+| Mode | Command | Max fix iterations | Re-explore on reject | Parallel | Best for |
+|------|---------|-------------------|---------------------|----------|----------|
+| **Autopilot** | `omd run "..."` | 3 | ❌ | ❌ | Routine coding, new features |
+| **Ralph** | `omd run '\$ralph "..."'` | 20 + 5 cycles | ✅ | ❌ | Bug fixes, tricky issues |
+| **Team** | `omd team <N> "..."` | 1 round | ❌ | ✅ N workers | Large refactors, module splits |
+| **Chat** | `omd chat` | Single turn | — | — | Exploration, Q&A, discussion |
+
+Use these prefixes in chat mode or `omd run` to force a specific mode:
+
+| Keyword | Use case | Terminal output |
+|---------|----------|-----------------|
+| `$autopilot "..."` | Force autopilot mode | `▶ Mode: autopilot` → explore→plan→execute→review→fix (max 3) |
+| `$ralph "..."` | Persistent verify-fix loop | `▶ Mode: ralph` → 20 iterations + 5 re-explore cycles |
+| `$team <N> "..."` | Parallel team execution | `▶ Mode: team` → N workers parallel + review merge |
+
+> **Important**: Always use **single quotes** around commands with `$ralph` or other magic keywords in the terminal to prevent shell variable expansion:
+> ```bash
+> # ✓ Correct: single quotes prevent $ralph from being expanded
+> omd run '$ralph "fix the bug"'
+>
+> # ✗ Wrong: double quotes let the shell expand $ralph to empty string
+> omd run "$ralph fix the bug"
+> ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `omd run "task"` | Autonomous execution (explore → plan → execute → review → fix) |
+| `omd ralph "task"` | Persistent verify-fix loop (Ralph mode, up to 20 iterations) |
 | `omd team <N> "task"` | Parallel team of N workers |
 | `omd chat` | Interactive chat with intent routing |
 | `omd mcp` | Start MCP server (for Claude Code, Codex CLI, Cursor) |
@@ -38,15 +319,6 @@ omd chat
 | `omd doctor` | Environment and API connectivity check |
 | `omd sessions` | List recent sessions |
 | `omd agents` | List available agent types |
-
-### Magic Keywords
-
-Use in chat or `run`:
-
-```
-$autopilot "implement REST API"   # Force autopilot mode
-$team 4 "refactor database"       # Team mode with 4 workers
-$ralph "fix performance bug"      # Persistent verify-fix loop (Ralph mode)
 ```
 
 ## Architecture
@@ -81,16 +353,16 @@ input → intent classifier → planner / architect / executor / debugger / trac
 
 | Agent | Model | Role |
 |-------|-------|------|
-| **planner** | deepseek-reasoner | Strategic planning — task decomposition, acceptance criteria, risk assessment |
-| **architect** | deepseek-reasoner | System design — architecture, component breakdown, interface contracts |
-| **executor** | deepseek-chat | Implementation engineer — code, files, commands |
-| **debugger** | deepseek-reasoner | Bug diagnosis, root cause analysis, fix proposals |
-| **tracer** | deepseek-reasoner | Causal tracing — competing hypotheses, evidence gathering |
-| **reviewer** | deepseek-chat | Adversarial code review (Claude Nexus-inspired) |
-| **security_reviewer** | deepseek-chat | Security review — OWASP Top 10, credential leaks, injection |
-| **verifier** | deepseek-chat | Completion verifier — acceptance criteria, edge case validation |
-| **test_engineer** | deepseek-chat | Test engineer — unit tests, integration tests, coverage analysis |
-| **explore** | deepseek-chat | Codebase explorer — search, read, understand code |
+| **planner** | deepseek-v4-pro | Strategic planning — task decomposition, acceptance criteria, risk assessment |
+| **architect** | deepseek-v4-pro | System design — architecture, component breakdown, interface contracts |
+| **executor** | deepseek-v4-flash | Implementation engineer — code, files, commands |
+| **debugger** | deepseek-v4-pro | Bug diagnosis, root cause analysis, fix proposals |
+| **tracer** | deepseek-v4-pro | Causal tracing — competing hypotheses, evidence gathering |
+| **reviewer** | deepseek-v4-flash | Adversarial code review (Claude Nexus-inspired) |
+| **security_reviewer** | deepseek-v4-flash | Security review — OWASP Top 10, credential leaks, injection |
+| **verifier** | deepseek-v4-flash | Completion verifier — acceptance criteria, edge case validation |
+| **test_engineer** | deepseek-v4-flash | Test engineer — unit tests, integration tests, coverage analysis |
+| **explore** | deepseek-v4-flash | Codebase explorer — search, read, understand code |
 
 ### Project Structure
 
@@ -132,12 +404,15 @@ Priority: **Environment variables** > **Project `.omd/config.json`** > **User `~
 
 ```bash
 export OMD_API_KEY=sk-...          # API key (falls back to DEEPSEEK_API_KEY)
-export OMD_MODEL=deepseek-chat     # Default model
-export OMD_REASONER_MODEL=deepseek-reasoner
+export OMD_MODEL=deepseek-v4-flash     # Default model (V4 Flash, fast & cheap)
+export OMD_REASONER_MODEL=deepseek-v4-pro  # Reasoning model (V4 Pro, stronger reasoning)
 export OMD_BASE_URL=https://api.deepseek.com
 export OMD_MAX_TOKENS=8192
 export OMD_TEMPERATURE=0.7
 export OMD_DEFAULT_MODE=autopilot   # autopilot, team, chat
+```
+
+> **Note**: The legacy model names `deepseek-chat` and `deepseek-reasoner` will be **retired on July 24, 2026**. Migrate to `deepseek-v4-flash` and `deepseek-v4-pro` as soon as possible. The old names map to V4 Flash during the grace period.
 ```
 
 ## MCP Integration
