@@ -1,0 +1,20 @@
+{
+  "name": "oh-my-deepseek",
+  "version": "0.2.0",
+  "description": "oh-my-deepseek (omd) — Multi-agent orchestration layer for DeepSeek.",
+  "main": "src/index.js",
+  "bin": {
+    "omd": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "chat": "node src/index.js chat",
+    "setup": "node src/index.js setup",
+    "doctor": "node src/index.js doctor",
+    "test": "node test/mcp-test.js",
+    "test:live": "node test/mcp-test.js --live"
+  },
+  "keywords": ["deepseek", "coding-agent", "ai", "orchestration"],
+  "license": "MIT",
+  "type": "module"
+}

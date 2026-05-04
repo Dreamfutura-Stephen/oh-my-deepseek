@@ -1,0 +1,36 @@
+node_modules/
+dist/
+.omd/
+*.js.map
+.DS_Store
+
+# Generated files
+banner-preview.html
+banner-preview.js
+convert-ascii.js
+input-art.txt
+tsconfig.json
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Misc
+*.tsbuildinfo
