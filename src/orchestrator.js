@@ -121,7 +121,12 @@ function classifyIntent(task) {
   const t = task.toLowerCase();
   if (t.includes('fix') || t.includes('bug') || t.includes('debug') || t.includes('error')) return 'debug';
   if (t.includes('review') || t.includes('check') || t.includes('audit')) return 'review';
-  if (t.includes('plan') || t.includes('design') || t.includes('architect')) return 'plan';
+  if (t.includes('security') || t.includes('vulnerability') || t.includes('injection')) return 'security_review';
+  if (t.includes('plan') || t.includes('strategy') || t.includes('decompose')) return 'plan';
+  if (t.includes('design') || t.includes('architect') || t.includes('architecture')) return 'design';
+  if (t.includes('test') || t.includes('spec') || t.includes('coverage') || t.includes('unit test')) return 'test';
+  if (t.includes('trace') || t.includes('root cause') || t.includes('hypothesis')) return 'trace';
+  if (t.includes('verify') || t.includes('validate') || t.includes('acceptance')) return 'verify';
   if (t.includes('explain') || t.includes('what') || t.includes('how') || t.includes('find')) return 'explore';
   return 'implement';
 }
@@ -136,90 +141,128 @@ function classifyIntent(task) {
  *   execute → [gate:execute] → review → [gate:review] →
  *   fix loop (max 3 iterations)
  */
-export async function autopilot({ task, onEvent }) {
+export async function autopilot({ task, onEvent, ralph = false }) {
   const emit = (type, data) => onEvent?.(data ? { ...data, type } : { type });
-  emit('mode', { mode: 'autopilot', task });
+  emit('mode', { mode: ralph ? 'ralph' : 'autopilot', task });
 
   const fullLog = [];
   let gateFailures = 0;
 
-  // ── Stage 0: Exploration ──
-  emit('stage', { stage: 'explore', message: 'Exploring codebase...' });
-  const exploreResult = await runAgent({
-    agentName: 'explore',
-    task: `Understand the codebase context for: "${task}". Search for relevant files, read key modules. Be thorough.`,
-    onEvent,
-  });
-  fullLog.push({ stage: 'explore', ...exploreResult });
-  checkGate('explore', exploreResult, null, onEvent);
+  const maxIter = ralph ? 20 : 3;
+  let currentTask = task;
+  let currentContext = '';
 
-  // ── Stage 1: Architecture & Planning ──
-  emit('stage', { stage: 'plan', message: 'Designing solution...' });
-  const planResult = await runAgent({
-    agentName: 'architect',
-    task: `Design a solution for: "${task}"\n\nExploration findings:\n${exploreResult.result}`,
-    onEvent,
-  });
-  fullLog.push({ stage: 'plan', ...planResult });
-
-  if (!checkGate('plan', planResult, null, onEvent)) {
-    gateFailures++;
-    emit('stage', { stage: 'gate_fail', message: 'Plan gate failed. Proceeding with caution.' });
-  }
-
-  appendDecision('architect', task, planResult.result?.substring(0, 300) || '');
-
-  // ── Stage 2-4: Execute-Review-Fix loop (OMC Ralph + Claude Nexus adversarial review) ──
-  let approved = false;
-  let iterations = 0;
-  let currentPlan = planResult.result;
-
-  while (!approved && iterations < 3) {
-    // Stage 2: Execute
-    emit('stage', { stage: 'execute', iteration: iterations + 1, message: 'Implementing...' });
-    const execResult = await runAgent({
-      agentName: 'executor',
-      task: `Execute the following plan:\n\n${currentPlan}\n\nImplement changes. After each, verify it works.`,
+  for (let outerCycle = 0; outerCycle < (ralph ? 5 : 1); outerCycle++) {
+    // ── Stage 0: Exploration ──
+    emit('stage', { stage: 'explore', cycle: outerCycle + 1, message: 'Exploring codebase...' });
+    const exploreResult = await runAgent({
+      agentName: 'explore',
+      task: `Understand the codebase context for: "${currentTask}"${currentContext ? '\n\nPrevious context:\n' + currentContext : ''}. Search for relevant files, read key modules. Be thorough.`,
       onEvent,
     });
-    fullLog.push({ stage: 'execute', iteration: iterations + 1, ...execResult });
-    checkGate('execute', execResult, null, onEvent);
+    fullLog.push({ stage: 'explore', cycle: outerCycle + 1, ...exploreResult });
+    checkGate('explore', exploreResult, null, onEvent);
 
-    // Stage 3: Review (Claude Nexus adversarial — reviewer assumes problems exist)
-    emit('stage', { stage: 'review', iteration: iterations + 1, message: 'Adversarial review...' });
-    const reviewResult = await runAgent({
-      agentName: 'reviewer',
-      task: `Adversarially review the changes for: "${task}". ` +
-            `Assume every change has hidden problems. Check correctness, edge cases, ` +
-            `security, performance, and style. Provide verdict: APPROVED / NEEDS_CHANGES / REJECTED.`,
+    // ── Stage 1: Architecture & Planning ──
+    emit('stage', { stage: 'plan', cycle: outerCycle + 1, message: 'Designing solution...' });
+    const planResult = await runAgent({
+      agentName: 'architect',
+      task: `Design a solution for: "${currentTask}"\n\nExploration findings:\n${exploreResult.result}`,
       onEvent,
     });
-    fullLog.push({ stage: 'review', iteration: iterations + 1, ...reviewResult });
-    checkGate('review', reviewResult, null, onEvent);
+    fullLog.push({ stage: 'plan', cycle: outerCycle + 1, ...planResult });
 
-    appendDecision('reviewer', `Review iteration ${iterations + 1}`, reviewResult.result?.substring(0, 300) || '');
+    if (!checkGate('plan', planResult, null, onEvent)) {
+      gateFailures++;
+      emit('stage', { stage: 'gate_fail', message: 'Plan gate failed. Proceeding with caution.' });
+    }
 
-    if (reviewResult.result.includes('APPROVED')) {
-      approved = true;
-      emit('stage', { stage: 'complete', message: 'All changes approved.' });
-    } else if (reviewResult.result.includes('REJECTED')) {
-      approved = true; // Stop — too broken to fix automatically
-      emit('stage', { stage: 'complete', message: 'Changes rejected. Manual intervention needed.' });
-    } else {
-      iterations++;
-      currentPlan = `Original task: ${task}\n\nPrevious attempt was reviewed. Fix these issues:\n\n${reviewResult.result}\n\nRe-implement with fixes.`;
-      emit('stage', { stage: 'fix', iteration: iterations, message: 'Applying fixes from review...' });
+    appendDecision('architect', currentTask, planResult.result?.substring(0, 300) || '');
+
+    // ── Stage 2-4: Execute-Review-Fix loop ──
+    let approved = false;
+    let iterations = 0;
+    let currentPlan = planResult.result;
+
+    while (!approved && iterations < maxIter) {
+      // Stage 2: Execute
+      emit('stage', { stage: 'execute', iteration: iterations + 1, cycle: outerCycle + 1, message: 'Implementing...' });
+      const execResult = await runAgent({
+        agentName: 'executor',
+        task: `Execute the following plan:\n\n${currentPlan}\n\nImplement changes. After each, verify it works.`,
+        onEvent,
+      });
+      fullLog.push({ stage: 'execute', iteration: iterations + 1, cycle: outerCycle + 1, ...execResult });
+      checkGate('execute', execResult, null, onEvent);
+
+      // Stage 3: Review (Claude Nexus adversarial)
+      emit('stage', { stage: 'review', iteration: iterations + 1, cycle: outerCycle + 1, message: 'Adversarial review...' });
+      const reviewResult = await runAgent({
+        agentName: 'reviewer',
+        task: `Adversarially review the changes for: "${currentTask}". ` +
+              `Assume every change has hidden problems. Check correctness, edge cases, ` +
+              `security, performance, and style. Provide verdict: APPROVED / NEEDS_CHANGES / REJECTED.`,
+        onEvent,
+      });
+      fullLog.push({ stage: 'review', iteration: iterations + 1, cycle: outerCycle + 1, ...reviewResult });
+      checkGate('review', reviewResult, null, onEvent);
+
+      appendDecision('reviewer', `Review iteration ${iterations + 1}`, reviewResult.result?.substring(0, 300) || '');
+
+      if (reviewResult.result.includes('APPROVED')) {
+        approved = true;
+        emit('stage', { stage: 'complete', message: 'All changes approved.' });
+        // Save cross-session state
+        saveRuntimeState({
+          lastTask: currentTask.substring(0, 80),
+          lastStatus: 'approved',
+          lastSession: new Date().toISOString(),
+        });
+        return { task, stages: fullLog, approved: true, iterations, gateFailures, ralph };
+      } else if (reviewResult.result.includes('REJECTED')) {
+        if (ralph) {
+          // Ralph: REJECTED triggers re-explore + re-plan, not stop
+          iterations++;
+          emit('stage', { stage: 'ralph_rethink', iteration: iterations, message: 'Rejected — re-exploring root cause...' });
+          currentContext = `Previous approach was rejected. Issues:\n\n${reviewResult.result}\n\nNeed a fundamentally different approach.`;
+          currentPlan = `Original task: ${currentTask}\n\nThe previous implementation was rejected. Rethink and implement a completely new approach.\n\nReview feedback:\n${reviewResult.result}`;
+          break; // break inner loop, go to next outer cycle (re-explore)
+        } else {
+          approved = true;
+          emit('stage', { stage: 'complete', message: 'Changes rejected. Manual intervention needed.' });
+          saveRuntimeState({
+            lastTask: currentTask.substring(0, 80),
+            lastStatus: 'rejected',
+            lastSession: new Date().toISOString(),
+          });
+          return { task, stages: fullLog, approved: false, iterations, gateFailures, ralph };
+        }
+      } else {
+        // NEEDS_CHANGES — fix and retry
+        iterations++;
+        currentPlan = `Original task: ${currentTask}\n\nPrevious attempt was reviewed. Fix these issues:\n\n${reviewResult.result}\n\nRe-implement with fixes.`;
+        emit('stage', { stage: 'fix', iteration: iterations, message: ralph ? `Applying fixes (attempt ${iterations}/${maxIter})...` : 'Applying fixes from review...' });
+      }
+    }
+
+    if (approved) break;
+
+    // If inner loop exhausted iterations in Ralph mode, try re-exploring
+    if (ralph && !approved && outerCycle < 4) {
+      currentContext = `After ${maxIter} fix attempts, still not approved. Last review feedback:\n\n${fullLog[fullLog.length - 1]?.result?.substring(0, 500) || ''}\n\nNeed a fresh approach.`;
+      emit('stage', { stage: 'ralph_cycle', cycle: outerCycle + 2, message: `Max fixes reached. Starting fresh cycle ${outerCycle + 2}...` });
     }
   }
 
   // Save cross-session state
   saveRuntimeState({
-    lastTask: task.substring(0, 80),
-    lastStatus: approved ? 'approved' : (iterations >= 3 ? 'max_iterations' : 'rejected'),
+    lastTask: currentTask.substring(0, 80),
+    lastStatus: 'max_iterations',
     lastSession: new Date().toISOString(),
   });
 
-  return { task, stages: fullLog, approved, iterations, gateFailures };
+  emit('stage', { stage: 'complete', message: ralph ? 'Ralph loop exhausted after all cycles. Manual review recommended.' : 'Max iterations reached.' });
+  return { task, stages: fullLog, approved: false, iterations: maxIter, gateFailures, ralph };
 }
 
 // ─── Team mode ──────────────────────────────────────────────
@@ -289,7 +332,9 @@ export async function teamMode({ task, workers = 3, onEvent }) {
 export async function chatMode({ task, context = [], onEvent }) {
   const intent = classifyIntent(task);
   const agentMap = {
-    debug: 'debugger', review: 'reviewer', plan: 'architect',
+    debug: 'debugger', review: 'reviewer', security_review: 'security_reviewer',
+    plan: 'planner', design: 'architect', test: 'test_engineer',
+    trace: 'tracer', verify: 'verifier',
     explore: 'explore', implement: 'executor',
   };
   return runAgent({ agentName: agentMap[intent] || 'executor', task, context, onEvent });

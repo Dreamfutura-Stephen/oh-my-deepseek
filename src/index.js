@@ -51,7 +51,11 @@ function makeEventHandler(verbose = true) {
         log(`${C.cyan}▶ Mode: ${evt.mode}${C.r}`);
         break;
       case 'stage':
-        log(`${C.yellow}⚡ ${evt.stage}${evt.message ? ` — ${evt.message}` : ''}${C.r}`);
+        if (evt.stage === 'ralph_rethink' || evt.stage === 'ralph_cycle') {
+          log(`${C.magenta}⟳ ${evt.stage}${evt.message ? ` — ${evt.message}` : ''}${C.r}`);
+        } else {
+          log(`${C.yellow}⚡ ${evt.stage}${evt.message ? ` — ${evt.message}` : ''}${C.r}`);
+        }
         break;
       case 'text': {
         if (!verbose) break;
@@ -88,7 +92,7 @@ function makeEventHandler(verbose = true) {
 // ─── Commands ────────────────────────────────────────────────
 
 async function cmdRun(task) {
-  const { mode, workers, task: resolvedTask } = resolveMode(task, loadConfig().defaultMode);
+  const { mode, workers, task: resolvedTask, ralph } = resolveMode(task, loadConfig().defaultMode);
   if (!resolvedTask) {
     log(`${C.red}No task provided.${C.r}`);
     process.exit(1);
@@ -103,7 +107,7 @@ async function cmdRun(task) {
 
   let result;
   if (mode === 'autopilot') {
-    result = await autopilot({ task: resolvedTask, onEvent });
+    result = await autopilot({ task: resolvedTask, onEvent, ralph });
   } else if (mode === 'team') {
     result = await teamMode({ task: resolvedTask, workers, onEvent });
   } else {
@@ -150,13 +154,13 @@ async function cmdChat() {
       continue;
     }
 
-    const { mode, workers, task } = resolveMode(input, 'chat');
+    const { mode, workers, task, ralph } = resolveMode(input, 'chat');
     if (mode !== 'chat') {
-      log(`${C.d}(executing in ${mode} mode)${C.r}`);
+      log(`${C.d}(executing in ${ralph ? 'ralph' : mode} mode)${C.r}`);
     }
 
     if (mode === 'autopilot') {
-      await autopilot({ task, onEvent: makeEventHandler(true) });
+      await autopilot({ task, onEvent: makeEventHandler(true), ralph });
     } else if (mode === 'team') {
       await teamMode({ task, workers, onEvent: makeEventHandler(false) });
     } else {
