@@ -304,105 +304,72 @@ function banner() {
     if (x >= 0 && x < W && y >= 0 && y < H) g[y][x] = ch;
   }
 
-  // ─── Load pixel file if available ─────────────────────────
-  let pixelLoaded = false;
-  try {
-    const pixelFile = new URL('./banner-pixels.txt', import.meta.url);
-    const data = readFileSync(pixelFile, 'utf-8');
-    const lines = data.trimEnd().split('\n').filter(l => l.length > 0);
-    if (lines.length >= 2) {
-      const fileH = Math.min(lines.length, H);
-      const fileW = Math.max(...lines.map(l => l.length));
-      const readW = Math.min(fileW, W);
-      for (let y = 0; y < fileH; y++) {
-        const line = lines[y] || '';
-        for (let x = 0; x < readW; x++) {
-          const ch = line[x] || '.';
-          g[y][x] = COL[ch] !== undefined ? ch : '.';
-        }
-      }
-      pixelLoaded = true;
-    }
-  } catch (e) {
-    // File not found — fall through to procedural generation
+  // ─── "DEEPSEEK" pixel text (left) + whale (right) ──────────
+  // Pixel font: 4 wide × 6 tall bitmap, drawn in bright blue ('5')
+  const font = {
+    D: [[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],
+    E: [[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
+    P: [[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,0],[1,0,0,0]],
+    S: [[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[0,0,0,1],[1,1,1,0]],
+    K: [[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,1,0],[1,0,0,1]],
+  };
+  const chars = 'DEEPSEEK';
+  let cx = 2; // left padding
+  const cy = 12; // vertically center 6 rows in 30
+  for (const ch of chars) {
+    const px = font[ch];
+    for (let r = 0; r < 6; r++)
+      for (let c = 0; c < 4; c++)
+        if (px[r][c]) set(cx + c, cy + r, '5');
+    cx += 5; // 4 wide + 1 gap
   }
 
-  // ─── Procedural generation (fallback) ─────────────────────
-  if (!pixelLoaded) {
-    function smoothstep(t) { return t * t * (3 - 2 * t); }
-    function interpolate(pts, x) {
-      if (x <= pts[0][0]) return pts[0][1];
-      if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
-      for (let i = 0; i < pts.length - 1; i++) {
-        if (x >= pts[i][0] && x <= pts[i + 1][0]) {
-          const t = (x - pts[i][0]) / (pts[i + 1][0] - pts[i][0]);
-          return Math.round(pts[i][1] + (pts[i + 1][1] - pts[i][1]) * smoothstep(t));
-        }
+  // ─── Right-side whale (columns 42-63) ──────────────────────────
+  function smoothstep(t) { return t * t * (3 - 2 * t); }
+  function interpolate(pts, x) {
+    if (x <= pts[0][0]) return pts[0][1];
+    if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (x >= pts[i][0] && x <= pts[i + 1][0]) {
+        const t = (x - pts[i][0]) / (pts[i + 1][0] - pts[i][0]);
+        return Math.round(pts[i][1] + (pts[i + 1][1] - pts[i][1]) * smoothstep(t));
       }
-      return pts[pts.length - 1][1];
     }
+    return pts[pts.length - 1][1];
+  }
 
-    // ─── Unified outline ──────────────────────────────────────
-    const topPts = [
-      [0, 12], [3, 10], [8, 8], [16, 8], [26, 8], [30, 9], [34, 9],
-      [38, 12], [42, 14], [45, 15], [48, 15],
-      [50, 12], [52, 9], [54, 6], [56, 4], [58, 3], [60, 4], [62, 8], [63, 12],
-    ];
-    const botPts = [
-      [0, 20], [3, 22], [8, 25], [16, 25], [26, 25], [32, 24], [38, 22],
-      [42, 19], [45, 17], [48, 16],
-      [50, 16], [52, 16], [54, 16], [56, 16], [58, 16], [60, 16], [62, 16], [63, 17],
-    ];
+  // Whale body: head at left (col 42), tail sweeping up at right (col 63)
+  const topPts = [[42,11],[44,9],[46,8],[48,8],[50,8],[52,9],[54,11],[56,13],[58,14],[60,15],[62,15],[63,14]];
+  const botPts = [[42,19],[44,21],[47,22],[50,23],[53,22],[56,20],[58,18],[60,17],[62,16],[63,15]];
 
-    // ─── Fill unified silhouette ──────────────────────────────
+  for (let x = 42; x < W; x++) {
+    const t = interpolate(topPts, x);
+    const b = interpolate(botPts, x);
+    if (t >= b) continue;
+    for (let y = t; y <= b; y++) set(x, y, '3');
+  }
+
+  // ─── 3D shading gradient ──────────────────────────────────
+  for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const t = interpolate(topPts, x);
-      const b = interpolate(botPts, x);
-      if (t > b) continue;
-      for (let y = t; y <= b; y++) set(x, y, '3');
-    }
-
-    // ─── 3D shading gradient ──────────────────────────────────
-    for (let y = 0; y < H; y++)
-      for (let x = 0; x < W; x++) {
-        if (g[y][x] === '.') continue;
-        if (x >= 50) {
-          const dx = (x - 56) / 8, dy = (y - 10) / 8;
-          const d = Math.hypot(dx, dy);
-          if (d < 0.20)       g[y][x] = '5';
-          else if (d < 0.40)  g[y][x] = '4';
-          else if (d < 0.60)  g[y][x] = '3';
-          else                g[y][x] = '2';
-        } else {
-          const dx = (x - 20) / 20, dy = (y - 14) / 12;
-          const d = Math.hypot(dx, dy);
-          if (d < 0.25)       g[y][x] = '5';
-          else if (d < 0.45)  g[y][x] = '4';
-          else if (d < 0.65)  g[y][x] = '3';
-          else                g[y][x] = '2';
-        }
+      if (g[y][x] === '.') continue;
+      if (x >= 42) {
+        // Whale shading
+        const dx = (x - 50) / 10, dy = (y - 15) / 8;
+        const d = Math.hypot(dx, dy);
+        if (d < 0.25)       g[y][x] = '5';
+        else if (d < 0.45)  g[y][x] = '4';
+        else if (d < 0.65)  g[y][x] = '3';
+        else                g[y][x] = '2';
       }
+    }
   }
 
-  // ─── Post-processing: belly, eye, highlights (both paths) ──
-
-  // Compute bottom outline per column for belly placement
-  const botYs = [];
-  for (let x = 0; x < W; x++) {
-    let botY = -1;
-    for (let sy = H - 1; sy >= 0; sy--) {
-      if (g[sy][x] !== '.') { botY = sy; break; }
-    }
-    botYs.push(botY);
-  }
-
-  // White belly (lower ~32% of each column's filled area)
-  for (let x = 2; x < W; x++) {
-    let topY = -1;
-    for (let sy = 0; sy < H; sy++) {
-      if (g[sy][x] !== '.') { topY = sy; break; }
-    }
-    const botY = botYs[x];
+  // ─── Whale belly ─────────────────────────────────────────
+  for (let x = 42; x < W; x++) {
+    let topY = -1, botY = -1;
+    for (let sy = 0; sy < H; sy++) { if (g[sy][x] !== '.') { topY = sy; break; } }
+    for (let sy = H - 1; sy >= 0; sy--) { if (g[sy][x] !== '.') { botY = sy; break; } }
     if (topY < 0 || botY < 0) continue;
     const bellyY = topY + Math.round((botY - topY) * 0.68);
     for (let y = bellyY; y <= botY; y++) {
@@ -412,24 +379,23 @@ function banner() {
     }
   }
 
-  // Eye (2x2) — fixed position relative to body
-  set(7, 9, 'e'); set(8, 9, 'e');
-  set(7, 10, 'e'); set(8, 10, 'e');
+  // ─── Whale eye (2x2) ────────────────────────────────────
+  set(44, 12, 'e'); set(45, 12, 'e');
+  set(44, 13, 'e'); set(45, 13, 'e');
 
-  // Top edge highlight on tail
-  for (let x = 48; x < 62; x++) {
-    let topY = -1;
+  // ─── Top edge highlight on tail ──────────────────────────
+  for (let x = 54; x < 62; x++) {
     for (let sy = 0; sy < H; sy++) {
-      if (g[sy][x] !== '.') { topY = sy; break; }
-    }
-    if (topY >= 0) {
-      for (let y = topY; y <= Math.min(H - 1, topY + 1); y++) {
-        if (g[y][x] !== '.' && g[y][x] !== '2') g[y][x] = '5';
+      if (g[sy][x] !== '.') {
+        for (let y = sy; y <= Math.min(H - 1, sy + 1); y++) {
+          if (g[y][x] !== '.' && g[y][x] !== '2') g[y][x] = '5';
+        }
+        break;
       }
     }
   }
 
-  // ─── Render half-block ▀ lines with 256-color ANSI ────────
+// ─── Render half-block ▀ lines with 256-color ANSI ────────
   const out = [];
   for (let r = 0; r < H - 1; r += 2) {
     let line = '';
