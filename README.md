@@ -3,7 +3,6 @@
 > **English** | [中文](README.zh-CN.md)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="banner.svg">
   <img alt="oh-my-deepseek whale banner" src="banner.svg" width="512" height="240">
 </picture>
 
