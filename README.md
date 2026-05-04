@@ -83,7 +83,7 @@ oh-my-deepseek does not stand alone. It is a synthesis — ideas borrowed, remix
 
 **Harmonist** taught us that the LLM should never see tools it cannot use. Tool schemas are filtered at definition time, not at execution time. A quiet but profound insight.
 
-**Houmao** taught us structured inter-agent communication. DELEGATE, REPORT, QUERY, ALERT, APPROVE, REJECT — mailboxes that let agents talk without chaos.
+**Structured inter-agent communication** — DELEGATE, REPORT, QUERY, ALERT, APPROVE, REJECT typed messages via mailboxes, letting agents exchange information without chaos.
 
 **ittybitty** taught us recursive sub-agent spawning. An agent can spawn another for a focused sub-task, which can spawn another. The `agent` tool is OMD's central recursion mechanism.
 
@@ -93,7 +93,7 @@ oh-my-deepseek does not stand alone. It is a synthesis — ideas borrowed, remix
 
 **autoapp-toolkit** taught us that agents need memory. ADR decision logs, MEMORY.md, cross-session state — so the system learns from its own history.
 
-**Sema Code** taught us adaptive context compression. System messages untouchable, recent messages preserved, older tool results gently summarized. Context is precious.
+**Adaptive context compression** — system messages kept intact, recent messages preserved in full, older tool results truncated to summaries. A practical necessity for any long-running agent loop.
 
 To the authors and maintainers of these projects: thank you. OMD is what it is because you showed what was possible.
 
