@@ -331,7 +331,8 @@ omd run "回复：OMD-OK"
 | `omd chat` | 带意图路由的交互式聊天 |
 | `omd mcp` | 启动 MCP 服务器（用于 Claude Code、Codex CLI、Cursor） |
 | `omd setup` | 初始化 `.omd/` 项目结构 |
-| `omd doctor` | 环境和 API 连接检查 |
+| `omd setup-mcp` | 一键注册 MCP 到 Claude Code（自动检测 API Key，无需重复输入） |
+| `omd doctor` | 环境和 API 连接检查（含 MCP 集成状态） |
 | `omd sessions` | 列出最近的会话 |
 | `omd agents` | 列出可用的智能体类型 |
 
@@ -429,7 +430,29 @@ export OMD_DEFAULT_MODE=autopilot   # autopilot, team, chat
 
 ## MCP 集成
 
-OMD 可作为标准 MCP 服务器运行，兼容 Claude Code、Codex CLI、Cursor 及任何 MCP 客户端：
+OMD 可作为标准 MCP 服务器运行，兼容 Claude Code、Codex CLI、Cursor 及任何 MCP 客户端。
+
+### 一键配置（推荐）
+
+如果你已在终端设置了 `OMD_API_KEY` 或 `DEEPSEEK_API_KEY`，只需一条命令即可将 OMD 注册到 Claude Code：
+
+```bash
+omd setup-mcp
+```
+
+效果：
+
+```
+✓ OMD registered in Claude Code config.
+  Config: /Users/you/.claude/claude.json
+  Key: sk-abcd12...
+```
+
+之后重启 Claude Code，即可在聊天中使用 OMD 的工具（如 `/mcp` 查看）。
+
+> **无需重复输入 API Key**：`omd setup-mcp` 自动从当前终端环境检测 `OMD_API_KEY` 或 `DEEPSEEK_API_KEY`，写入 Claude Code 配置。后续运行 OMD MCP 时会自动继承。
+
+### 手动启动
 
 ```bash
 omd mcp
@@ -437,7 +460,19 @@ omd mcp
 
 暴露的工具：`omd_autopilot`、`omd_team`、`omd_chat`、`omd_explore`、`omd_sessions`、`omd_decisions`、`omd_memory`。
 
-Claude Code 配置示例：
+### API Key 优先级
+
+`omd doctor` 会自动检查 MCP 集成状态。API Key 按以下顺序查找：
+
+1. `OMD_API_KEY` 环境变量
+2. `DEEPSEEK_API_KEY` 环境变量（与 Claude Code / Codex 共享）
+3. `~/.claude/claude.json` 中 `mcpServers.omd.env`（Claude Code MCP 配置）
+
+这意味着如果你已经在使用 Claude Code + DeepSeek，OMD 会自动继承你的 API Key，无需额外配置。
+
+### 手动配置 Claude Code
+
+你也可以手动编辑 `~/.claude/claude.json`：
 
 ```json
 {

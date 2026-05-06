@@ -326,7 +326,8 @@ Use these prefixes in chat mode or `omd run` to force a specific mode:
 | `omd chat` | Interactive chat with intent routing |
 | `omd mcp` | Start MCP server (for Claude Code, Codex CLI, Cursor) |
 | `omd setup` | Initialize `.omd/` project structure |
-| `omd doctor` | Environment and API connectivity check |
+| `omd setup-mcp` | Register MCP in Claude Code with one command (auto-detects API key, no re-entry) |
+| `omd doctor` | Environment and API connectivity check (includes MCP status) |
 | `omd sessions` | List recent sessions |
 | `omd agents` | List available agent types |
 ```
@@ -427,7 +428,29 @@ export OMD_DEFAULT_MODE=autopilot   # autopilot, team, chat
 
 ## MCP Integration
 
-OMD runs as a standard MCP server, compatible with Claude Code, Codex CLI, Cursor, and any MCP client:
+OMD runs as a standard MCP server, compatible with Claude Code, Codex CLI, Cursor, and any MCP client.
+
+### One-command setup (recommended)
+
+If you already have `OMD_API_KEY` or `DEEPSEEK_API_KEY` set in your terminal, register OMD with Claude Code in one step:
+
+```bash
+omd setup-mcp
+```
+
+Output:
+
+```
+✓ OMD registered in Claude Code config.
+  Config: /Users/you/.claude/claude.json
+  Key: sk-abcd12...
+```
+
+Restart Claude Code, then use OMD's tools (check with `/mcp`).
+
+> **No API key re-entry needed**: `omd setup-mcp` automatically detects `OMD_API_KEY` or `DEEPSEEK_API_KEY` from your terminal environment and writes it into the Claude Code config. OMD MCP inherits it automatically when it starts.
+
+### Manual start
 
 ```bash
 omd mcp
@@ -435,7 +458,19 @@ omd mcp
 
 Exposed tools: `omd_autopilot`, `omd_team`, `omd_chat`, `omd_explore`, `omd_sessions`, `omd_decisions`, `omd_memory`.
 
-Example Claude Code config:
+### API key priority
+
+`omd doctor` now checks MCP integration status. The API key is resolved in this order:
+
+1. `OMD_API_KEY` environment variable
+2. `DEEPSEEK_API_KEY` environment variable (shared with Claude Code / Codex)
+3. `~/.claude/claude.json` `mcpServers.omd.env` (Claude Code MCP config)
+
+This means if you're already using Claude Code + DeepSeek, OMD inherits your API key automatically — no extra configuration needed.
+
+### Manual Claude Code config
+
+You can also manually edit `~/.claude/claude.json`:
 
 ```json
 {

@@ -209,6 +209,37 @@ function cmdSetup() {
   log(`\n${C.d}Setup complete. Run 'omd chat' to start interactive mode.${C.r}`);
   log(`${C.d}Or 'omd run "your task"' for one-shot autonomous execution.${C.r}`);
 }
+async function cmdSetupMcp() {
+  log(banner());
+  log(`${C.cyan}Setting up MCP server for Claude Code...${C.r}
+`);
+
+  const { setupClaudeCodeMcp, checkClaudeCodeMcpConfig } = await import('./config.js');
+  
+  // Check if already configured
+  const existing = checkClaudeCodeMcpConfig();
+  if (existing.configured) {
+    log(`${C.yellow}⚠ OMD is already registered in Claude Code.${C.r}`);
+    log(`  Config: ${C.d}${existing.configPath}${C.r}
+`);
+    log(`${C.d}Run again to overwrite.${C.r}`);
+    return;
+  }
+
+  const result = setupClaudeCodeMcp();
+  if (result.success) {
+    log(`${C.green}✓${C.r} ${result.message.split('\n')[0]}`);
+    log(`  ${C.d}${result.message.split('\n')[1]}${C.r}`);
+    log(`  ${C.d}${result.message.split('\n')[2]}${C.r}`);
+    log(`\n${C.d}Restart Claude Code to activate.${C.r}`);
+    log(`${C.d}Then use /mcp to see OMD's tools.${C.r}`);
+  } else {
+    log(`${C.red}✗ ${result.message}${C.r}`);
+  }
+}
+
+
+
 
 async function cmdDoctor() {
   log(banner());
@@ -228,6 +259,11 @@ async function cmdDoctor() {
   // .omd directory
   const omdExists = existsSync(`${process.cwd()}/.omd`);
   checks.push(['.omd/ directory', omdExists]);
+
+  // Claude Code MCP integration
+  const { checkClaudeCodeMcpConfig } = await import('./config.js');
+  const mcpStatus = checkClaudeCodeMcpConfig();
+  checks.push(['Claude Code MCP', mcpStatus.configured, mcpStatus.configured ? 'OMD registered' : 'not configured']);
 
   // Config
   try {
@@ -273,8 +309,8 @@ function cmdSessions() {
 }
 
 function banner() {
-  // ▀ half-block pixel banner: "DEEPSEEK" pixel text (left) + whale pixel art (right)
-  // Uses original whale pixel data from banner-pixels.txt for consistent appearance.
+  // ▀ "DEEPSEEK" pixel text (left) overlaid on full whale pixel art
+  // Whale loaded from banner-pixels.txt, DEEPSEEK rendered in bright blue on top.
 
   const R = '\x1b[0m';
 
@@ -294,7 +330,7 @@ function banner() {
   const W = 64, H = 30;
   const g = Array.from({length: H}, () => Array(W).fill('.'));
 
-  // ─── Load whale pixel art from file ──────────────────────
+  // ─── Load whale pixel art from banner-pixels.txt ──────────
   try {
     const bp = readFileSync(
       new URL('./banner-pixels.txt', import.meta.url), 'utf-8'
@@ -305,10 +341,10 @@ function banner() {
         if (line[x] !== '.') g[y][x] = line[x];
       }
     }
-  } catch { /* fallback: use blank grid */ }
+  } catch { /* use blank grid */ }
 
-  // ─── Overlay "DEEPSEEK" pixel text (left side) ──────────
-  // Pixel font: 4 wide x 6 tall bitmap, drawn in bright blue ('5')
+  // ─── Clear DEEPSEEK text area and draw text ──────────────
+  // Pixel font: 4 wide x 6 tall, drawn in bright blue ('5')
   const font = {
     D: [[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],
     E: [[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
@@ -316,10 +352,9 @@ function banner() {
     S: [[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[0,0,0,1],[1,1,1,0]],
     K: [[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,1,0],[1,0,0,1]],
   };
-  const chars = 'DEEPSEEK';
   let cx = 2;
   const cy = 12;
-  for (const ch of chars) {
+  for (const ch of 'DEEPSEEK') {
     const px = font[ch];
     for (let r = 0; r < 6; r++)
       for (let c = 0; c < 4; c++)
@@ -334,7 +369,7 @@ function banner() {
     for (let c = 0; c < W; c++) {
       const top = COL[g[r][c]] !== undefined ? COL[g[r][c]] : COL['.'];
       const bot = COL[g[r + 1][c]] !== undefined ? COL[g[r + 1][c]] : COL['.'];
-      line += `\x1b[38;5;${top}m\x1b[48;5;${bot}m\u2580`;
+      line += '\x1b[38;5;' + top + 'm\x1b[48;5;' + bot + 'm\u2580';
     }
     out.push(line + R);
   }
@@ -343,6 +378,8 @@ function banner() {
   const tagline = `${DM}oh-my-deepseek v${pkg.version}  \u00b7  DeepSeek-powered coding agent framework${R}`;
   return out.join('\n') + '\n' + tagline;
 }
+
+
 
 // ─── Main CLI router ─────────────────────────────────────────
 
@@ -397,6 +434,9 @@ async function main() {
     case 'setup':
       cmdSetup();
       break;
+    case 'setup-mcp':
+      await cmdSetupMcp();
+      break;
 
     case 'doctor':
       await cmdDoctor();
@@ -430,7 +470,8 @@ async function main() {
       log(`  ${C.cyan}team${C.r} <N> "task"  Run with N parallel workers`);
       log(`  ${C.cyan}chat${C.r}             Start interactive chat mode`);
       log(`  ${C.cyan}mcp${C.r}              Start MCP server (for Claude Code / Codex / Cursor)`);
-      log(`  ${C.cyan}setup${C.r}            Initialize .omd/ and config`);
+      
+      log(`  ${C.cyan}setup-mcp${C.r}        Add MCP server to Claude Code (no key re-entry)`);log(`  ${C.cyan}setup${C.r}            Initialize .omd/ and config`);
       log(`  ${C.cyan}doctor${C.r}           Check environment and API connectivity`);
       log(`  ${C.cyan}sessions${C.r}         List recent sessions`);
       log(`  ${C.cyan}agents${C.r}           List available agents\n`);
@@ -447,3 +488,4 @@ main().catch(err => {
   log(`${C.red}Fatal: ${err.message}${C.r}`);
   process.exit(1);
 });
+

@@ -78,11 +78,31 @@ export function loadConfig() {
 }
 
 /**
- * Get DeepSeek API key. Checks OMD_API_KEY first, then DEEPSEEK_API_KEY.
+ * Get DeepSeek API key. Priority:
+ *   1. OMD_API_KEY env var
+ *   2. DEEPSEEK_API_KEY env var (shared with Claude Code / Codex)
+ *   3. ~/.claude/claude.json mcpServers.omd.env (Claude Code MCP config)
+ *   4. null
  * Validates that the key is ASCII-safe for use in HTTP headers.
  */
 export function getApiKey() {
-  const key = process.env.OMD_API_KEY || process.env.DEEPSEEK_API_KEY || null;
+  // 1-2. Environment variables
+  let key = process.env.OMD_API_KEY || process.env.DEEPSEEK_API_KEY || null;
+
+  // 3. Fallback: read from Claude Code's MCP config (if OMD is registered there)
+  if (!key) {
+    try {
+      const claudeConfigPath = join(homedir(), '.claude', 'claude.json');
+      if (existsSync(claudeConfigPath)) {
+        const claudeConfig = JSON.parse(readFileSync(claudeConfigPath, 'utf-8'));
+        const omdEnv = claudeConfig?.mcpServers?.omd?.env;
+        if (omdEnv) {
+          key = omdEnv.OMD_API_KEY || omdEnv.DEEPSEEK_API_KEY || null;
+        }
+      }
+    } catch { /* ignore read/parse errors */ }
+  }
+
   if (key && !/^[\x00-\x7F]+$/.test(key)) {
     throw new Error(
       'API key contains non-ASCII characters. DeepSeek API keys use only ASCII. ' +
@@ -90,6 +110,82 @@ export function getApiKey() {
     );
   }
   return key;
+}
+
+/**
+ * Check if OMD is configured as an MCP server in Claude Code.
+ * @returns {{ configured: boolean, configPath: string, omdEntry: object|null }}
+ */
+export function checkClaudeCodeMcpConfig() {
+  const configPath = join(homedir(), '.claude', 'claude.json');
+  const result = { configured: false, configPath, omdEntry: null };
+
+  if (!existsSync(configPath)) return result;
+
+  try {
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    result.omdEntry = config?.mcpServers?.omd || null;
+    result.configured = !!result.omdEntry;
+  } catch { /* ignore */ }
+
+  return result;
+}
+
+/**
+ * Register OMD as an MCP server in Claude Code's config (~/.claude/claude.json).
+ * Automatically detects the API key from the environment and includes it.
+ * @returns {{ success: boolean, message: string }}
+ */
+export function setupClaudeCodeMcp() {
+  const configPath = join(homedir(), '.claude', 'claude.json');
+
+  // Detect API key from env
+  const apiKey = process.env.OMD_API_KEY || process.env.DEEPSEEK_API_KEY || null;
+
+  // Determine the path to OMD's index.js
+  let omdPath = new URL('index.js', import.meta.url).pathname;
+  // Convert file:// URL to path if needed
+  if (omdPath.startsWith('/')) {
+    // already a path
+  } else if (omdPath.startsWith('file://')) {
+    omdPath = omdPath.slice(7);
+  }
+
+  const mcpEntry = {
+    command: 'node',
+    args: [omdPath, 'mcp'],
+  };
+
+  // Only add env if we have a key to pass
+  if (apiKey) {
+    mcpEntry.env = { OMD_API_KEY: apiKey };
+  }
+
+  // Read existing config or create new
+  let config = {};
+  if (existsSync(configPath)) {
+    try {
+      config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    } catch { /* start fresh if corrupt */ }
+  }
+
+  if (!config.mcpServers) config.mcpServers = {};
+  config.mcpServers.omd = mcpEntry;
+
+  // Ensure directory exists
+  const dir = join(homedir(), '.claude');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+
+  const keyMsg = apiKey
+    ? `API key (${apiKey.substring(0, 8)}...)`
+    : 'no API key (will inherit from parent env)';
+
+  return {
+    success: true,
+    message: `OMD registered in Claude Code config.\n  Config: ${configPath}\n  Key: ${keyMsg}`,
+  };
 }
 
 /**
