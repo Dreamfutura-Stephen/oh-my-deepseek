@@ -30,6 +30,17 @@ omd ralph "fix performance bug"
 omd chat
 ```
 
+After installing and setting your API key, run `omd setup` to launch the interactive wizard and choose your usage mode:
+
+| Mode | When to use | What it does |
+|------|-------------|-------------|
+| **1 Standalone** | Direct terminal usage, no coding agent needed | Configures API key → verifies connectivity → ready for `omd run` / `omd chat` |
+| **2 Run OMD inside agent** | Claude Code / Codex users who want the agent itself on DeepSeek | Auto-switches agent's API provider to DeepSeek + registers OMD as MCP |
+| **3 MCP only** | Already have a coding agent, just want OMD as a tool add-on | Registers OMD as MCP server; leaves agent's existing API provider untouched |
+| **4 Manual config** | Want full control, or using a non-detectable MCP client | Shows JSON config templates for each client to copy-paste |
+
+> **Quick pick**: Terminal-only → choose 1. Want Claude Code/Codex on DeepSeek with OMD multi-agent → choose 2. Happy with your agent's current provider, just adding OMD → choose 3.
+
 ## Getting Started Guide
 
 New to OMD? Follow these steps to go from zero to running your first task.
