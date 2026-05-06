@@ -15,12 +15,8 @@
 ## 快速开始
 
 ```bash
-# 克隆仓库
-git clone https://github.com/Dreamfutura-Stephen/oh-my-deepseek.git
-cd oh-my-deepseek
-
-# 全局安装（使 omd 命令可用）
-npm install -g .
+# 全局安装
+npm install -g oh-my-deepseek
 
 # 设置 API 密钥
 export OMD_API_KEY=sk-your-key-here

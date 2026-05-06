@@ -10,12 +10,8 @@
 ## Quick Start
 
 ```bash
-# Clone the repo
-git clone https://github.com/Dreamfutura-Stephen/oh-my-deepseek.git
-cd oh-my-deepseek
-
-# Install globally (makes omd command available)
-npm install -g .
+# Install globally
+npm install -g oh-my-deepseek
 
 # Set your API key
 export OMD_API_KEY=sk-your-key-here
