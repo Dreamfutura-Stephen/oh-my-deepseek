@@ -86,20 +86,32 @@ Environment Detection
 
 How do you want to use OMD?
 
-  1  Via MCP with Claude Code / Codex / Cursor
-  2  Standalone CLI mode
-  3  Manual MCP configuration
+  1  Standalone CLI mode
+     Use omd run / omd chat directly from terminal.
+     No coding agent needed — just an API key.
 
-Enter choice (1-3) [default: 1]:
+  2  在 Claude Code / Codex 中运行 OMD
+     配置编码智能体使用 DeepSeek 接口，OMD 作为多智能体层。
+     让 Claude Code / Codex 本身跑在 DeepSeek 上，复杂任务交给 OMD。
+
+  3  Via MCP with Claude Code / Codex / Cursor
+     OMD runs as a tool provider behind your coding agent.
+     Your agent's own API provider stays unchanged.
+
+  4  Manual MCP configuration
+     Show the JSON config to add OMD to any MCP client.
+
+Enter choice (1-4) [default: 1]:
 ```
 
 交互式安装向导会自动检测你的环境（已安装的编程智能体、API Key、MCP 状态），然后根据你的选择引导完成配置：
 
-- **MCP 模式**（选项 1）：检测到 Claude Code 且配置了 DeepSeek，自动注册 OMD 为 MCP 服务器
-- **独立模式**（选项 2）：配置 API Key 并验证连接，直接使用 `omd run` / `omd chat`
-- **手动配置**（选项 3）：显示适用于各客户端的 JSON 配置模板
+- **独立模式**（选项 1）：配置 API Key 并验证连接，直接使用 `omd run` / `omd chat`
+- **在 Claude Code / Codex 中运行 OMD**（选项 2）：配置智能体使用 DeepSeek 接口 + 注册 OMD 为 MCP。让智能体跑在 DeepSeek 上，复杂多智能体任务交给 OMD
+- **MCP 模式**（选项 3）：不修改智能体的 API 配置，仅注册 OMD 为 MCP 服务器
+- **手动配置**（选项 4）：显示适用于各客户端的 JSON 配置模板
 
-> 如果检测到的编程智能体配置的不是 DeepSeek 接口，OMD 会给出警告提示，让你确认后再继续。
+> 选项 2 如果检测到编程智能体配置的不是 DeepSeek 接口，会自动将其切换为 DeepSeek。选项 3 则保持智能体原有配置不变。
 
 向导也会创建 `.omd/` 文件夹（含 `sessions/`、`memory/`、`logs/` 子目录）和默认配置文件。所有会话记录和决策日志都会保存在这里。
 

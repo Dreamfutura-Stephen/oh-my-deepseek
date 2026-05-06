@@ -84,20 +84,32 @@ Environment Detection
 
 How do you want to use OMD?
 
-  1  Via MCP with Claude Code / Codex / Cursor
-  2  Standalone CLI mode
-  3  Manual MCP configuration
+  1  Standalone CLI mode
+     Use omd run / omd chat directly from terminal.
+     No coding agent needed — just an API key.
 
-Enter choice (1-3) [default: 1]:
+  2  Run OMD inside Claude Code / Codex
+     Configures the coding agent to use DeepSeek API + registers OMD as MCP.
+     Your agent runs on DeepSeek; complex tasks delegate to OMD's multi-agent pipeline.
+
+  3  Via MCP with Claude Code / Codex / Cursor
+     OMD runs as a tool provider behind your coding agent.
+     Your agent's own API provider stays unchanged.
+
+  4  Manual MCP configuration
+     Show the JSON config to add OMD to any MCP client.
+
+Enter choice (1-4) [default: 1]:
 ```
 
 The interactive wizard detects your environment (installed coding agents, API keys, MCP status) and guides you through the right setup:
 
-- **MCP mode** (option 1): Detects Claude Code / Codex configured with DeepSeek, auto-registers OMD as an MCP server
-- **Standalone mode** (option 2): Configures your API key, verifies connectivity, and you're ready to run `omd run` / `omd chat`
-- **Manual config** (option 3): Shows JSON config templates for each MCP client
+- **Standalone mode** (option 1): Configures your API key, verifies connectivity, and you're ready to run `omd run` / `omd chat`
+- **Run OMD inside agent** (option 2): Configures the coding agent to use DeepSeek as its API provider AND registers OMD as MCP. Two-in-one: your agent runs on DeepSeek, plus OMD's multi-agent pipeline is available for complex tasks.
+- **MCP mode** (option 3): Only registers OMD as an MCP server. The agent's API provider stays unchanged.
+- **Manual config** (option 4): Shows JSON config templates for each MCP client
 
-> If a coding agent is detected but NOT configured for DeepSeek, OMD warns you and asks for confirmation before proceeding.
+> Option 2 auto-switches the agent to DeepSeek if it's using another provider. Option 3 leaves the agent's provider untouched.
 
 This also creates the `.omd/` folder with `sessions/`, `memory/`, and `logs/` directories. All session records and decision logs are stored here.
 

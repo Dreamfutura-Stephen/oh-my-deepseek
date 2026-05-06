@@ -21,7 +21,7 @@ import { autopilot, teamMode, chatMode, resolveMode } from './orchestrator.js';
 import { createSession, saveMessages, saveSession, listRecentSessions } from './state.js';
 import { listAgents } from './agent.js';
 import { startMcpServer } from './mcp.js';
-import { existsSync, readFileSync, appendFileSync } from 'node:fs';
+import { existsSync, readFileSync, appendFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 const pkg = createRequire(import.meta.url)('../package.json');
@@ -194,27 +194,28 @@ async function cmdSetup() {
 
   // ─── Step 2: Mode selection ──────────────────────────────
   log(`\n${C.b}How do you want to use OMD?${C.r}\n`);
-  log(`  ${C.cyan}1${C.r}  Via MCP with Claude Code / Codex / Cursor`);
-  log(`     ${C.d}OMD runs as a tool provider behind your coding agent.${C.r}`);
-  log(`     ${C.d}Best for daily coding — your agent calls OMD for DeepSeek tasks.${C.r}\n`);
-  log(`  ${C.cyan}2${C.r}  Standalone CLI mode`);
+  log(`  ${C.cyan}1${C.r}  Standalone CLI mode`);
   log(`     ${C.d}Use omd run / omd chat directly from terminal.${C.r}`);
   log(`     ${C.d}No coding agent needed — just an API key.${C.r}\n`);
-  log(`  ${C.cyan}3${C.r}  Manual MCP configuration`);
+  log(`  ${C.cyan}2${C.r}  在 Claude Code / Codex 中运行 OMD`);
+  log(`     ${C.d}配置编码智能体使用 DeepSeek 接口，OMD 作为多智能体层。${C.r}`);
+  log(`     ${C.d}让 Claude Code / Codex 本身跑在 DeepSeek 上，复杂任务交给 OMD。${C.r}\n`);
+  log(`  ${C.cyan}3${C.r}  Via MCP with Claude Code / Codex / Cursor`);
+  log(`     ${C.d}OMD runs as a tool provider behind your coding agent.${C.r}`);
+  log(`     ${C.d}Your agent's own API provider stays unchanged.${C.r}\n`);
+  log(`  ${C.cyan}4${C.r}  Manual MCP configuration`);
   log(`     ${C.d}Show the JSON config to add OMD to any MCP client.${C.r}\n`);
 
-  const choice = (await ask(`${C.green}Enter choice (1-3) [default: 1]: ${C.r}`)) || '1';
+  const choice = (await ask(`${C.green}Enter choice (1-4) [default: 1]: ${C.r}`)) || '1';
 
   log(''); // spacer
 
-  if (choice === '1') {
-    await setupMcpWithAgent(env, rl, ask);
-  } else if (choice === '2') {
-    await setupStandalone(env, rl, ask);
-  } else if (choice === '3') {
-    await setupManualMcp(env, rl, ask);
-  } else {
-    log(`${C.red}Invalid choice.${C.r}`);
+  switch (choice) {
+    case '1': await setupStandalone(env, rl, ask); break;
+    case '2': await setupRunInAgent(env, rl, ask); break;
+    case '3': await setupMCP(env, rl, ask); break;
+    case '4': await setupManualMcp(env, rl, ask); break;
+    default: log(`${C.red}Invalid choice.${C.r}`);
   }
 
   rl.close();
@@ -226,70 +227,96 @@ async function cmdSetup() {
   log(`  ${C.d}Run ${C.r}omd run "task"${C.d} for one-shot execution.${C.r}`);
 }
 
-// ─── Mode 1: MCP with coding agent ───────────────────────────
+// ─── Mode 2: 在编码智能体中运行 OMD ──────────────────────────
 
-async function setupMcpWithAgent(env, rl, ask) {
-  log(`${C.b}MCP Mode — Configure OMD as a tool provider${C.r}\n`);
+async function setupRunInAgent(env, rl, ask) {
+  log(`${C.b}在 Claude Code / Codex 中运行 OMD${C.r}`);
+  log(`${C.d}配置智能体使用 DeepSeek 接口 + OMD 多智能体层作为 MCP 增强。${C.r}\n`);
+
+  // API key
+  const apiKey = await ensureApiKey(env, rl, ask);
+  if (!apiKey) {
+    log(`${C.yellow}⚠ API key required for this mode. Run setup again with a valid key.${C.r}`);
+    return;
+  }
 
   // Detect installed coding agents
   const agents = Object.entries(env.agents).filter(([, info]) => info.installed);
 
-  if (agents.length > 0) {
-    log(`${C.green}Detected coding agents:${C.r}`);
-    for (const [name, info] of agents) {
-      const providerLabel = info.provider === 'deepseek'
-        ? `${C.green}DeepSeek${C.r}`
-        : info.provider
-          ? `${C.yellow}${info.provider}${C.r}`
-          : `${C.yellow}unknown provider${C.r}`;
-      log(`  · ${C.d}${name}:${C.r} installed, API provider: ${providerLabel}`);
-
-      // Warn if agent is not using DeepSeek
-      if (info.installed && info.provider && info.provider !== 'deepseek') {
-        log(`    ${C.yellow}⚠ This agent is configured for ${info.provider}, not DeepSeek.${C.r}`);
-        log(`    ${C.d}  OMD requires DeepSeek. Check your agent's API provider settings.${C.r}`);
-        const proceed = await ask(`    ${C.yellow}Proceed anyway? (Y/n): ${C.r}`);
-        if (proceed?.toLowerCase() === 'n') {
-          log(`    ${C.d}Skipping ${name}.${C.r}`);
-          continue;
-        }
-      }
-    }
-  } else {
-    log(`${C.yellow}No coding agent detected.${C.r}`);
-    log(`  ${C.d}I can still configure OMD as an MCP server.${C.r}`);
-    log(`  ${C.d}Supported: Claude Code, Codex CLI, Cursor, any MCP client.${C.r}\n`);
+  if (agents.length === 0) {
+    log(`${C.yellow}⚠ No coding agents detected.${C.r}`);
+    log(`  ${C.d}This mode requires Claude Code, Codex CLI, or Cursor.${C.r}`);
+    log(`  ${C.d}Install one first, or choose Standalone mode (option 1) to use OMD directly.${C.r}`);
+    return;
   }
 
-  // API key check
-  await ensureApiKey(env, rl, ask);
+  log(`${C.green}Detected coding agents:${C.r}`);
+  for (const [name, info] of agents) {
+    const providerLabel = info.provider === 'deepseek'
+      ? `${C.green}DeepSeek${C.r}`
+      : info.provider
+        ? `${C.yellow}${info.provider}${C.r}`
+        : `${C.yellow}unknown${C.r}`;
+    log(`  · ${C.d}${name}:${C.r} installed, currently using ${providerLabel}`);
 
-  // Configure for detected agents
+    // Step A: Configure the agent's API provider to DeepSeek
+    if (info.provider === 'deepseek') {
+      log(`    ${C.green}✓ Already configured for DeepSeek${C.r}`);
+    } else {
+      log(`    ${C.yellow}⚠ Not using DeepSeek. Configure it now?${C.r}`);
+      const doConfig = await ask(`    ${C.green}Configure ${name} to use DeepSeek? (Y/n): ${C.r}`);
+      if (doConfig?.toLowerCase() !== 'n') {
+        const ok = configureAgentProvider(name, apiKey);
+        if (ok) log(`    ${C.green}✓ ${name} configured for DeepSeek${C.r}`);
+      } else {
+        log(`    ${C.d}Skipping provider config for ${name}.${C.r}`);
+      }
+    }
+  }
+
+  // Step B: Register OMD as MCP for each agent
+  log(`\n${C.b}Step 2: Register OMD as MCP server${C.r}`);
+
   if (env.agents['claude-code']?.installed) {
     log('');
     await configureClaudeCodeMcp(rl, ask);
   }
 
   if (env.agents['codex']?.installed) {
-    log(`\n  ${C.cyan}Codex CLI${C.r} — add OMD to your ~/.codex/config.json:`);
-    printMcpJson('codex');
+    log(`\n  ${C.cyan}Codex CLI${C.r} — add OMD MCP and DeepSeek provider:`);
+    const codexCfg = {
+      provider: 'deepseek',
+      apiKey: apiKey,
+      model: 'deepseek-v4-flash',
+      mcpServers: { omd: getMcpEntry() },
+    };
+    log(`  ${C.d}${JSON.stringify(codexCfg, null, 2).split('\n').join('\n  ')}${C.r}`);
+    const writeIt = await ask(`\n  ${C.green}Write to ~/.codex/config.json? (Y/n): ${C.r}`);
+    if (writeIt?.toLowerCase() !== 'n') {
+      try {
+        const dir = join(homedir(), '.codex');
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'config.json'), JSON.stringify(codexCfg, null, 2), 'utf-8');
+        log(`  ${C.green}✓ Written to ~/.codex/config.json${C.r}`);
+      } catch (e) {
+        log(`  ${C.red}✗ ${e.message}${C.r}`);
+      }
+    }
   }
 
   if (env.agents['cursor']?.installed) {
-    log(`\n  ${C.cyan}Cursor${C.r} — add OMD to your .cursor/mcp.json:`);
+    log(`\n  ${C.cyan}Cursor${C.r} — add OMD MCP to .cursor/mcp.json:`);
     printMcpJson('cursor');
+    log(`  ${C.d}For Cursor's API provider, set it in Cursor Settings > Models > API Key.${C.r}`);
   }
 
-  // If no agents detected, show generic config
-  if (agents.length === 0) {
-    log(`\n  ${C.cyan}Generic MCP config${C.r} — add to your client's MCP config:`);
-    printMcpJson('generic');
-  }
-
-  log(`\n${C.green}✓ MCP mode configured. Restart your coding agent to activate.${C.r}`);
+  // Summary
+  log(`\n${C.green}${C.b}✓ 在编码智能体中运行 OMD 配置完成！${C.r}`);
+  log(`  ${C.d}你的编码智能体现已配置使用 DeepSeek 接口，OMD 作为多智能体 MCP 层可用。${C.r}`);
+  log(`  ${C.d}重启编码智能体后即可生效。${C.r}`);
 }
 
-// ─── Mode 2: Standalone CLI ──────────────────────────────────
+// ─── Mode 1: Standalone CLI ──────────────────────────────────
 
 async function setupStandalone(env, rl, ask) {
   log(`${C.b}Standalone Mode — Use OMD directly from terminal${C.r}\n`);
@@ -326,7 +353,58 @@ async function setupStandalone(env, rl, ask) {
   log(`  ${C.d}Try it: ${C.r}omd run "hello world"${C.d} or ${C.r}omd chat${C.d}.${C.r}`);
 }
 
-// ─── Mode 3: Manual MCP config ───────────────────────────────
+// ─── Mode 3: MCP mode (agent provider unchanged) ──────────────
+
+async function setupMCP(env, rl, ask) {
+  log(`${C.b}MCP Mode — Configure OMD as a tool provider${C.r}`);
+  log(`${C.d}Your coding agent's own API provider stays unchanged.${C.r}\n`);
+
+  // API key check
+  await ensureApiKey(env, rl, ask);
+
+  // Detect installed coding agents
+  const agents = Object.entries(env.agents).filter(([, info]) => info.installed);
+
+  if (agents.length > 0) {
+    log(`${C.green}Detected coding agents:${C.r}`);
+    for (const [name, info] of agents) {
+      const providerLabel = info.provider === 'deepseek'
+        ? `${C.green}DeepSeek${C.r}`
+        : info.provider
+          ? `${C.yellow}${info.provider}${C.r}`
+          : `${C.yellow}unknown${C.r}`;
+      log(`  · ${C.d}${name}:${C.r} API provider: ${providerLabel}`);
+    }
+  } else {
+    log(`${C.yellow}No coding agent detected.${C.r}`);
+    log(`  ${C.d}I can still configure OMD as an MCP server.${C.r}`);
+    log(`  ${C.d}Supported: Claude Code, Codex CLI, Cursor, any MCP client.${C.r}\n`);
+  }
+
+  // Register OMD MCP for each detected agent
+  if (env.agents['claude-code']?.installed) {
+    log('');
+    await configureClaudeCodeMcp(rl, ask);
+  }
+
+  if (env.agents['codex']?.installed) {
+    log(`\n  ${C.cyan}Codex CLI${C.r} — add OMD to ~/.codex/config.json:`);
+    printMcpJson('codex');
+  }
+
+  if (env.agents['cursor']?.installed) {
+    log(`\n  ${C.cyan}Cursor${C.r} — add OMD to .cursor/mcp.json:`);
+    printMcpJson('cursor');
+  }
+
+  // If no agents detected, show generic config
+  if (agents.length === 0) {
+    log(`\n  ${C.cyan}Generic MCP config${C.r} — add to your client's MCP config:`);
+    printMcpJson('generic');
+  }
+
+  log(`\n${C.green}✓ MCP mode configured. Restart your coding agent to activate.${C.r}`);
+}
 
 async function setupManualMcp(env, rl, ask) {
   log(`${C.b}Manual MCP Configuration${C.r}\n`);
@@ -461,6 +539,78 @@ async function configureClaudeCodeMcp(rl, ask) {
   } else {
     log(`${C.red}✗ ${result.message}${C.r}`);
   }
+}
+
+/**
+ * Configure a coding agent to use DeepSeek as its API provider.
+ */
+function configureAgentProvider(agent, apiKey) {
+  try {
+    if (agent === 'claude-code') return configureClaudeCodeProvider(apiKey);
+    if (agent === 'codex') return configureCodexProvider(apiKey);
+    if (agent === 'cursor') {
+      log(`  ${C.d}For Cursor, set DeepSeek API key in Settings > Models.${C.r}`);
+      return false;
+    }
+    return false;
+  } catch (e) {
+    log(`  ${C.red}${e.message}${C.r}`);
+    return false;
+  }
+}
+
+function configureClaudeCodeProvider(apiKey) {
+  const yamlPath = join(homedir(), '.claude', 'config.yaml');
+
+  let yaml = '';
+  if (existsSync(yamlPath)) {
+    yaml = readFileSync(yamlPath, 'utf-8');
+  }
+
+  if (/provider\s*:/.test(yaml)) {
+    yaml = yaml.replace(/provider\s*:.*/, 'provider: deepseek');
+    if (/apiKey\s*:/.test(yaml)) {
+      yaml = yaml.replace(/apiKey\s*:.*/, `apiKey: ${apiKey}`);
+    } else {
+      yaml += `\napiKey: ${apiKey}`;
+    }
+    if (/model\s*:/.test(yaml)) {
+      yaml = yaml.replace(/model\s*:.*/, 'model: deepseek-v4-flash');
+    }
+  } else {
+    yaml += `\n# DeepSeek provider (configured by omd setup)\nprovider: deepseek\napiKey: ${apiKey}\nmodel: deepseek-v4-flash\n`;
+  }
+
+  const dir = join(homedir(), '.claude');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(yamlPath, yaml, 'utf-8');
+
+  // Also write .env as fallback for Claude Code
+  const envPath = join(homedir(), '.claude', '.env');
+  writeFileSync(envPath,
+    `# Claude Code DeepSeek provider (by omd setup)\nANTHROPIC_BASE_URL=https://api.deepseek.com\nANTHROPIC_API_KEY=${apiKey}\n`,
+    'utf-8');
+
+  log(`    ${C.green}~/.claude/config.yaml configured for DeepSeek${C.r}`);
+  log(`    ${C.d}Also wrote ~/.claude/.env as fallback. Restart Claude Code to apply.${C.r}`);
+  return true;
+}
+
+function configureCodexProvider(apiKey) {
+  const configPath = join(homedir(), '.codex', 'config.json');
+  let config = {};
+  if (existsSync(configPath)) {
+    try { config = JSON.parse(readFileSync(configPath, 'utf-8')); } catch { /* start fresh */ }
+  }
+  config.provider = 'deepseek';
+  config.apiKey = apiKey;
+  config.model = 'deepseek-v4-flash';
+
+  const dir = join(homedir(), '.codex');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+  log(`    ${C.green}~/.codex/config.json configured for DeepSeek${C.r}`);
+  return true;
 }
 
 function getMcpEntry() {
