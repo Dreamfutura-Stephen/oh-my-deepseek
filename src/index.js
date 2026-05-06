@@ -273,19 +273,12 @@ function cmdSessions() {
 }
 
 function banner() {
-  // ▀ half-block pixel whale + standard ANSI blue, works in any ANSI terminal
-  // Unified silhouette with upward-sweeping tail
+  // ▀ half-block pixel banner: "DEEPSEEK" pixel text (left) + whale pixel art (right)
+  // Uses original whale pixel data from banner-pixels.txt for consistent appearance.
 
   const R = '\x1b[0m';
 
-  // Standard ANSI colors (8-color, universally supported)
-  // Using bright variants where available
-  const C = {
-    // foreground; background pairs (as funcs)
-    bg: (top, bot) => `\x1b[38;5;${top}m\x1b[48;5;${bot}m▀`,
-  };
-
-  // 256-color palette indices for blue tones (widely supported)
+  // 256-color palette indices
   const COL = {
     '.': 0,       // background = black
     '1': 236,     // darkest gray
@@ -300,115 +293,54 @@ function banner() {
 
   const W = 64, H = 30;
   const g = Array.from({length: H}, () => Array(W).fill('.'));
-  function set(x, y, ch) {
-    if (x >= 0 && x < W && y >= 0 && y < H) g[y][x] = ch;
-  }
 
-  // ─── "DEEPSEEK" pixel text (left) + whale (right) ──────────
-  // Pixel font: 4 wide × 6 tall bitmap, drawn in bright blue ('5')
+  // ─── Load whale pixel art from file ──────────────────────
+  try {
+    const bp = readFileSync(
+      new URL('./banner-pixels.txt', import.meta.url), 'utf-8'
+    ).split('\n').filter(l => l.trim());
+    for (let y = 0; y < Math.min(bp.length, H); y++) {
+      const line = bp[y];
+      for (let x = 0; x < Math.min(line.length, W); x++) {
+        if (line[x] !== '.') g[y][x] = line[x];
+      }
+    }
+  } catch { /* fallback: use blank grid */ }
+
+  // ─── Overlay "DEEPSEEK" pixel text (left side) ──────────
+  // Pixel font: 4 wide x 6 tall bitmap, drawn in bright blue ('5')
   const font = {
-    D: [[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],
+    D: [[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],
     E: [[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
     P: [[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,0],[1,0,0,0]],
     S: [[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[0,0,0,1],[1,1,1,0]],
     K: [[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,1,0],[1,0,0,1]],
   };
   const chars = 'DEEPSEEK';
-  let cx = 2; // left padding
-  const cy = 12; // vertically center 6 rows in 30
+  let cx = 2;
+  const cy = 12;
   for (const ch of chars) {
     const px = font[ch];
     for (let r = 0; r < 6; r++)
       for (let c = 0; c < 4; c++)
-        if (px[r][c]) set(cx + c, cy + r, '5');
-    cx += 5; // 4 wide + 1 gap
+        if (px[r][c]) g[cy + r][cx + c] = '5';
+    cx += 5;
   }
 
-  // ─── Right-side whale (columns 42-63) ──────────────────────────
-  function smoothstep(t) { return t * t * (3 - 2 * t); }
-  function interpolate(pts, x) {
-    if (x <= pts[0][0]) return pts[0][1];
-    if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
-    for (let i = 0; i < pts.length - 1; i++) {
-      if (x >= pts[i][0] && x <= pts[i + 1][0]) {
-        const t = (x - pts[i][0]) / (pts[i + 1][0] - pts[i][0]);
-        return Math.round(pts[i][1] + (pts[i + 1][1] - pts[i][1]) * smoothstep(t));
-      }
-    }
-    return pts[pts.length - 1][1];
-  }
-
-  // Whale body: head at left (col 42), tail sweeping up at right (col 63)
-  const topPts = [[42,11],[44,9],[46,8],[48,8],[50,8],[52,9],[54,11],[56,13],[58,14],[60,15],[62,15],[63,14]];
-  const botPts = [[42,19],[44,21],[47,22],[50,23],[53,22],[56,20],[58,18],[60,17],[62,16],[63,15]];
-
-  for (let x = 42; x < W; x++) {
-    const t = interpolate(topPts, x);
-    const b = interpolate(botPts, x);
-    if (t >= b) continue;
-    for (let y = t; y <= b; y++) set(x, y, '3');
-  }
-
-  // ─── 3D shading gradient ──────────────────────────────────
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (g[y][x] === '.') continue;
-      if (x >= 42) {
-        // Whale shading
-        const dx = (x - 50) / 10, dy = (y - 15) / 8;
-        const d = Math.hypot(dx, dy);
-        if (d < 0.25)       g[y][x] = '5';
-        else if (d < 0.45)  g[y][x] = '4';
-        else if (d < 0.65)  g[y][x] = '3';
-        else                g[y][x] = '2';
-      }
-    }
-  }
-
-  // ─── Whale belly ─────────────────────────────────────────
-  for (let x = 42; x < W; x++) {
-    let topY = -1, botY = -1;
-    for (let sy = 0; sy < H; sy++) { if (g[sy][x] !== '.') { topY = sy; break; } }
-    for (let sy = H - 1; sy >= 0; sy--) { if (g[sy][x] !== '.') { botY = sy; break; } }
-    if (topY < 0 || botY < 0) continue;
-    const bellyY = topY + Math.round((botY - topY) * 0.68);
-    for (let y = bellyY; y <= botY; y++) {
-      if (g[y][x] === '.') continue;
-      const rel = (y - bellyY) / (botY - bellyY);
-      g[y][x] = rel < 0.40 ? 'W' : 'w';
-    }
-  }
-
-  // ─── Whale eye (2x2) ────────────────────────────────────
-  set(44, 12, 'e'); set(45, 12, 'e');
-  set(44, 13, 'e'); set(45, 13, 'e');
-
-  // ─── Top edge highlight on tail ──────────────────────────
-  for (let x = 54; x < 62; x++) {
-    for (let sy = 0; sy < H; sy++) {
-      if (g[sy][x] !== '.') {
-        for (let y = sy; y <= Math.min(H - 1, sy + 1); y++) {
-          if (g[y][x] !== '.' && g[y][x] !== '2') g[y][x] = '5';
-        }
-        break;
-      }
-    }
-  }
-
-// ─── Render half-block ▀ lines with 256-color ANSI ────────
+  // ─── Render half-block \u2580 lines with 256-color ANSI ──────
   const out = [];
   for (let r = 0; r < H - 1; r += 2) {
     let line = '';
     for (let c = 0; c < W; c++) {
       const top = COL[g[r][c]] !== undefined ? COL[g[r][c]] : COL['.'];
       const bot = COL[g[r + 1][c]] !== undefined ? COL[g[r + 1][c]] : COL['.'];
-      line += `\x1b[38;5;${top}m\x1b[48;5;${bot}m▀`;
+      line += `\x1b[38;5;${top}m\x1b[48;5;${bot}m\u2580`;
     }
     out.push(line + R);
   }
 
   const DM = '\x1b[2m';
-  const tagline = `${DM}oh-my-deepseek v${pkg.version}  ·  DeepSeek-powered coding agent framework${R}`;
+  const tagline = `${DM}oh-my-deepseek v${pkg.version}  \u00b7  DeepSeek-powered coding agent framework${R}`;
   return out.join('\n') + '\n' + tagline;
 }
 
