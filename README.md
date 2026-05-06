@@ -70,15 +70,31 @@ omd setup
 效果（含鲸鱼横幅，此处省略）:
 
 ```
-✓ Created .omd/ directory structure
-✓ API key found (sk-abcd1234...)
-✓ Config saved to .omd/config.json
+oh-my-deepseek Setup Wizard
 
-Setup complete. Run 'omd chat' to start interactive mode.
-Or 'omd run "your task"' for one-shot autonomous execution.
+Environment Detection
+  API keys: OMD_API_KEY (sk-abcd12...)
+  claude-code: installed, API: DeepSeek
+  codex: installed, API: DeepSeek
+
+How do you want to use OMD?
+
+  1  Via MCP with Claude Code / Codex / Cursor
+  2  Standalone CLI mode
+  3  Manual MCP configuration
+
+Enter choice (1-3) [default: 1]:
 ```
 
-这会在当前目录创建 `.omd/` 文件夹（含 `sessions/`、`memory/`、`logs/` 子目录）和默认配置文件。所有会话记录和决策日志都会保存在这里。
+交互式安装向导会自动检测你的环境（已安装的编程智能体、API Key、MCP 状态），然后根据你的选择引导完成配置：
+
+- **MCP 模式**（选项 1）：检测到 Claude Code 且配置了 DeepSeek，自动注册 OMD 为 MCP 服务器
+- **独立模式**（选项 2）：配置 API Key 并验证连接，直接使用 `omd run` / `omd chat`
+- **手动配置**（选项 3）：显示适用于各客户端的 JSON 配置模板
+
+> 如果检测到的编程智能体配置的不是 DeepSeek 接口，OMD 会给出警告提示，让你确认后再继续。
+
+向导也会创建 `.omd/` 文件夹（含 `sessions/`、`memory/`、`logs/` 子目录）和默认配置文件。所有会话记录和决策日志都会保存在这里。
 
 ### 4. 环境检查
 

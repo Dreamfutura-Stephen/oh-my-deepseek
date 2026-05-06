@@ -208,3 +208,96 @@ export function saveProjectConfig(config) {
   writeFileSync(path, JSON.stringify(config, null, 2), 'utf-8');
   cachedConfig = null;
 }
+
+/**
+ * Detect installed coding agents, API keys, and environment state.
+ * Used by the interactive setup wizard.
+ * @returns {object}
+ */
+export function detectEnvironment() {
+  const result = {
+    apiKeys: {},
+    agents: {},
+    omdMcpConfigured: false,
+    shellProfile: null,
+  };
+
+  // ─── API Keys ──────────────────────────────────────────────
+  const keyChecks = ['OMD_API_KEY', 'DEEPSEEK_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CODEX_API_KEY'];
+  for (const name of keyChecks) {
+    const val = process.env[name];
+    result.apiKeys[name] = { found: !!val, prefix: val ? val.substring(0, 10) + '...' : null };
+  }
+
+  // ─── Shell profile ─────────────────────────────────────────
+  const shell = process.env.SHELL || '';
+  if (shell.includes('zsh')) result.shellProfile = '.zshrc';
+  else if (shell.includes('bash')) result.shellProfile = '.bashrc';
+  else result.shellProfile = '.profile';
+
+  // ─── Claude Code ───────────────────────────────────────────
+  const claudeJsonPath = join(homedir(), '.claude', 'claude.json');
+  const claudeYamlPath = join(homedir(), '.claude', 'config.yaml');
+  const ccInstalled = existsSync(claudeJsonPath) || existsSync(claudeYamlPath);
+  let ccProvider = null;
+
+  if (existsSync(claudeJsonPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(claudeJsonPath, 'utf-8'));
+      result.omdMcpConfigured = !!cfg?.mcpServers?.omd;
+      // Check mcpServers for DeepSeek references
+      if (cfg?.mcpServers) {
+        for (const [, srv] of Object.entries(cfg.mcpServers)) {
+          const env = srv.env || {};
+          if (env.OMD_API_KEY || env.DEEPSEEK_API_KEY) ccProvider = 'deepseek';
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  // Basic YAML check for DeepSeek provider in Claude Code config
+  if (existsSync(claudeYamlPath)) {
+    try {
+      const yaml = readFileSync(claudeYamlPath, 'utf-8');
+      if (/deepseek/i.test(yaml)) ccProvider = ccProvider || 'deepseek';
+    } catch { /* ignore */ }
+  }
+  if (process.env.DEEPSEEK_API_KEY) ccProvider = ccProvider || 'deepseek';
+  if (process.env.ANTHROPIC_API_KEY && !ccProvider) ccProvider = 'anthropic';
+
+  result.agents['claude-code'] = {
+    installed: ccInstalled,
+    provider: ccProvider,
+    configPath: existsSync(claudeJsonPath) ? claudeJsonPath : claudeYamlPath,
+  };
+
+  // ─── Codex CLI ─────────────────────────────────────────────
+  const codexDir = join(homedir(), '.codex');
+  const codexConfigPath = join(codexDir, 'config.json');
+  const codexInstalled = existsSync(codexDir);
+  let codexProvider = null;
+  if (existsSync(codexConfigPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(codexConfigPath, 'utf-8'));
+      const p = (cfg.provider || '').toLowerCase();
+      if (p.includes('deepseek')) codexProvider = 'deepseek';
+      if (cfg.apiKey?.startsWith('sk-')) codexProvider = codexProvider || 'deepseek';
+    } catch { /* ignore */ }
+  }
+  if (process.env.DEEPSEEK_API_KEY && !codexProvider) codexProvider = 'deepseek';
+
+  result.agents['codex'] = {
+    installed: codexInstalled,
+    provider: codexProvider,
+    configPath: codexConfigPath,
+  };
+
+  // ─── Cursor ────────────────────────────────────────────────
+  const cursorDir = join(homedir(), '.cursor');
+  result.agents['cursor'] = {
+    installed: existsSync(cursorDir),
+    provider: process.env.DEEPSEEK_API_KEY ? 'deepseek' : null,
+    configPath: join(cursorDir, 'mcp.json'),
+  };
+
+  return result;
+}

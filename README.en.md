@@ -75,15 +75,31 @@ omd setup
 Output (banner trimmed):
 
 ```
-✓ Created .omd/ directory structure
-✓ API key found (sk-abcd1234...)
-✓ Config saved to .omd/config.json
+oh-my-deepseek Setup Wizard
 
-Setup complete. Run 'omd chat' to start interactive mode.
-Or 'omd run "your task"' for one-shot autonomous execution.
+Environment Detection
+  API keys: OMD_API_KEY (sk-abcd12...)
+  claude-code: installed, API: DeepSeek
+  codex: installed, API: DeepSeek
+
+How do you want to use OMD?
+
+  1  Via MCP with Claude Code / Codex / Cursor
+  2  Standalone CLI mode
+  3  Manual MCP configuration
+
+Enter choice (1-3) [default: 1]:
 ```
 
-This creates the `.omd/` folder with `sessions/`, `memory/`, and `logs/` directories. All session records and decision logs are stored here.
+The interactive wizard detects your environment (installed coding agents, API keys, MCP status) and guides you through the right setup:
+
+- **MCP mode** (option 1): Detects Claude Code / Codex configured with DeepSeek, auto-registers OMD as an MCP server
+- **Standalone mode** (option 2): Configures your API key, verifies connectivity, and you're ready to run `omd run` / `omd chat`
+- **Manual config** (option 3): Shows JSON config templates for each MCP client
+
+> If a coding agent is detected but NOT configured for DeepSeek, OMD warns you and asks for confirmation before proceeding.
+
+This also creates the `.omd/` folder with `sessions/`, `memory/`, and `logs/` directories. All session records and decision logs are stored here.
 
 ### 4. Environment check
 
