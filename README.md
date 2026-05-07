@@ -2,7 +2,14 @@
 
 > [English](README.en.md) | **中文**
 
-**DeepSeek 多智能体编排层。** 零依赖框架，将 DeepSeek API 转化为多智能体编码系统——自主执行、并行团队模式、交互式聊天和 MCP 集成。最佳实践方案是搭配 claudecode 调用oh-my-deepseek (omd) mcp，大幅降低你的费用
+**DeepSeek 多智能体编排层。** 零依赖框架，将 DeepSeek API 转化为多智能体编码系统——自主执行、并行团队模式、交互式聊天和 MCP 集成。
+四种模式
+1  Standalone CLI mode               ← 直接终端使用，无需编码智能体
+2  在 Claude Code / Codex 中运行 OMD  ← 在claudecode、codex等智能体使用 DeepSeek + OMD MCP
+3  Via MCP with Claude Code / Codex   ← 仅注册 OMD 为 MCP，不改智能体配置，由其他智能体调用omd进行编程
+4  Manual MCP configuration           ← 显示 JSON 模板，自行配置mcp
+
+
 <img width="1913" height="822" alt="image" src="https://github.com/user-attachments/assets/b96bf41c-fa95-43b3-8c9d-857ba2664ab7" />
 
 ## 快速开始
